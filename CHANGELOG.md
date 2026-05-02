@@ -3,6 +3,10 @@
 本文件记录当前维护分支的重要功能、修复、配置、部署与文档变更。
 This file records important feature, fix, configuration, deployment, and documentation changes for the current maintained branch.
 
+## 2026-05-02
+
+- 修复 / Fixed: `ADMIN_USERNAME` 现在会在首次初始化管理员时覆盖默认用户名，并补充 Docker 与 README 说明，明确初始管理员环境变量只在用户表为空时生效 / Honor `ADMIN_USERNAME` when creating the initial administrator and document that initial admin environment variables apply only while the user table is empty.
+
 ## 2026-05-01
 
 - 修复 / Fixed: 任务历史日志会将“开始执行”动作流程框解析为结构化卡片，避免中文、emoji 与框线字符混排导致表格错位 / Render sign-task action-flow banners as structured cards in history logs so Chinese text, emoji, and box-drawing characters no longer misalign.
