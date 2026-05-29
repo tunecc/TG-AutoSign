@@ -124,6 +124,26 @@ def get_account_profile(account_name: str) -> dict[str, Any]:
     }
 
 
+def get_account_private_fields(account_name: str) -> dict[str, Any]:
+    data = _load_account_store()
+    entry = data.get("accounts", {}).get(account_name)
+    if not isinstance(entry, dict):
+        return {}
+    return {
+        key: entry.get(key)
+        for key in (
+            "phone",
+            "username",
+            "first_name",
+            "user_id",
+            "api_id",
+            "api_hash",
+            "two_factor_password",
+        )
+        if key in entry
+    }
+
+
 def get_account_proxy(account_name: str) -> Optional[str]:
     profile = get_account_profile(account_name)
     proxy = profile.get("proxy")
@@ -184,6 +204,37 @@ def set_account_profile(
             if isinstance(notification_chat_id, str)
             else notification_chat_id
         )
+    entry["updated_at"] = utc_now_iso_z()
+    accounts[account_name] = entry
+    _save_account_store(data)
+
+
+def update_account_private_fields(account_name: str, fields: dict[str, Any]) -> None:
+    """Store account metadata that must not be returned by public account APIs."""
+    safe_fields: dict[str, Any] = {}
+    for key, value in fields.items():
+        if not isinstance(key, str) or not key:
+            continue
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                continue
+        safe_fields[key] = value
+
+    if not safe_fields:
+        return
+
+    data = _load_account_store()
+    accounts = data.get("accounts")
+    if not isinstance(accounts, dict):
+        accounts = {}
+        data["accounts"] = accounts
+    entry = accounts.get(account_name)
+    if not isinstance(entry, dict):
+        entry = {}
+    entry.update(safe_fields)
     entry["updated_at"] = utc_now_iso_z()
     accounts[account_name] = entry
     _save_account_store(data)

@@ -523,6 +523,115 @@ select option {
   animation: floatUp 0.6s 0.1s backwards;
 }
 
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-tool-btn {
+  width: auto;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.account-package-format-box,
+.account-package-results {
+  border: 1px solid var(--glass-border);
+  background: rgba(128, 128, 128, 0.06);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.account-package-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.account-package-checkbox input {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+}
+
+.account-package-checkbox span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-package-checkbox strong {
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.account-package-checkbox small {
+  font-size: 11px;
+  color: var(--text-sub);
+  line-height: 1.4;
+}
+
+.account-package-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.account-package-result-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.account-package-status {
+  min-width: 56px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.account-package-status-success {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.16);
+}
+
+.account-package-status-skipped {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.account-package-status-failed {
+  color: #fecdd3;
+  background: rgba(244, 63, 94, 0.16);
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -784,9 +893,27 @@ select option {
     padding: 20px;
   }
 
+  .dashboard-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .dashboard-tool-btn {
+    flex: 1 1 100%;
+  }
+
   .card-grid {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .account-package-result-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .modal-content {

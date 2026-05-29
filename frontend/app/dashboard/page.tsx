@@ -16,6 +16,8 @@ import {
   updateAccount,
   verifyAccountLogin,
   deleteAccount,
+  importAccountPackage,
+  exportAccountPackage,
   getAccountLogs,
   clearAccountLogs,
   listSignTasks,
@@ -23,6 +25,8 @@ import {
   AccountStatusItem,
   AccountLog,
   SignTask,
+  AccountPackageImportItem,
+  AccountPackageFormat,
 } from "../../lib/api";
 import type { NotificationChannel } from "../../lib/types";
 import {
@@ -35,7 +39,9 @@ import {
   X,
   PencilSimple,
   PaperPlaneRight,
-  Trash
+  Trash,
+  UploadSimple,
+  DownloadSimple
 } from "@phosphor-icons/react";
 import { BRAND_NAME } from "@/lib/brand";
 import { ToastContainer, useToast } from "../../components/ui/toast";
@@ -74,6 +80,14 @@ export default function Dashboard() {
   const [logsAccountName, setLogsAccountName] = useState("");
   const [accountLogs, setAccountLogs] = useState<AccountLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+
+  // 账号包导入导出
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importPackageFile, setImportPackageFile] = useState<File | null>(null);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importingPackage, setImportingPackage] = useState(false);
+  const [exportingPackage, setExportingPackage] = useState<AccountPackageFormat | null>(null);
+  const [importResults, setImportResults] = useState<AccountPackageImportItem[]>([]);
 
   // 添加账号对话框
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -535,6 +549,58 @@ export default function Dashboard() {
       addToast(formatErrorMessage("save_failed", err), "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openImportDialog = () => {
+    setImportPackageFile(null);
+    setImportOverwrite(false);
+    setImportResults([]);
+    setShowImportDialog(true);
+  };
+
+  const handleImportPackage = async () => {
+    if (!token || !importPackageFile) return;
+    try {
+      setImportingPackage(true);
+      const result = await importAccountPackage(token, importPackageFile, importOverwrite);
+      setImportResults(result.items || []);
+      const summary = `${t("account_package_import_done")} ${t("success")}: ${result.success_count}, ${t("account_package_skipped")}: ${result.skipped_count}, ${t("failure")}: ${result.failure_count}`;
+      addToast(summary, result.failure_count > 0 ? "error" : "success");
+      await loadData(token);
+      setAccountStatusMap({});
+      try {
+        sessionStorage.removeItem(DASHBOARD_STATUS_CACHE_KEY);
+        sessionStorage.removeItem(DASHBOARD_STATUS_CHECKED_KEY);
+      } catch {
+        // ignore cache cleanup errors
+      }
+    } catch (err: any) {
+      addToast((err?.message ? `${t("account_package_import_failed")}: ${err.message}` : t("account_package_import_failed")), "error");
+    } finally {
+      setImportingPackage(false);
+    }
+  };
+
+  const handleExportPackage = async (format: AccountPackageFormat) => {
+    if (!token) return;
+    try {
+      setExportingPackage(format);
+      const blob = await exportAccountPackage(token, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      a.href = url;
+      a.download = `tg-autosign-accounts-${format}-${stamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      addToast(t("account_package_export_success"), "success");
+    } catch (err: any) {
+      addToast((err?.message ? `${t("account_package_export_failed")}: ${err.message}` : t("account_package_export_failed")), "error");
+    } finally {
+      setExportingPackage(null);
     }
   };
 
@@ -1054,6 +1120,42 @@ export default function Dashboard() {
       </nav>
 
       <main className="main-content">
+        <div className="dashboard-toolbar">
+          <div>
+            <div className="text-sm font-bold text-main">{t("sidebar_accounts")}</div>
+            <div className="text-xs text-main/40">{accounts.length} {t("sidebar_accounts")}</div>
+          </div>
+          <div className="dashboard-toolbar-actions">
+            <button
+              className="btn-secondary dashboard-tool-btn"
+              onClick={openImportDialog}
+              disabled={loading || importingPackage}
+              title={t("account_package_import")}
+            >
+              <UploadSimple weight="bold" size={16} />
+              <span>{t("account_package_import")}</span>
+            </button>
+            <button
+              className="btn-secondary dashboard-tool-btn"
+              onClick={() => handleExportPackage("telethon")}
+              disabled={loading || accounts.length === 0 || exportingPackage !== null}
+              title={t("account_package_export_telethon")}
+            >
+              {exportingPackage === "telethon" ? <Spinner className="animate-spin" size={16} /> : <DownloadSimple weight="bold" size={16} />}
+              <span>{t("account_package_export_telethon")}</span>
+            </button>
+            <button
+              className="btn-secondary dashboard-tool-btn"
+              onClick={() => handleExportPackage("tdata")}
+              disabled={loading || accounts.length === 0 || exportingPackage !== null}
+              title={t("account_package_export_tdata")}
+            >
+              {exportingPackage === "tdata" ? <Spinner className="animate-spin" size={16} /> : <DownloadSimple weight="bold" size={16} />}
+              <span>{t("account_package_export_tdata")}</span>
+            </button>
+          </div>
+        </div>
+
         {loading && accounts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-main/30">
             <Spinner className="animate-spin mb-4" size={32} />
@@ -1064,9 +1166,6 @@ export default function Dashboard() {
             {accounts.map((acc) => {
               const initial = acc.name.charAt(0).toUpperCase();
               const statusInfo = accountStatusMap[acc.name];
-              const status = statusInfo?.status || "checking";
-              const isInvalid = status === "invalid" || Boolean(statusInfo?.needs_relogin);
-              const isCheckingLike = status === "checking" || (status === "error" && !statusInfo?.needs_relogin);
               const statusKey = (() => {
                 const currentStatus = statusInfo?.status || "connected"; // Default to "connected" if statusInfo is undefined
                 const isCheckingOrError = currentStatus === "checking" || (currentStatus === "error" && !statusInfo?.needs_relogin);
@@ -1159,6 +1258,95 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {showImportDialog && (
+        <div className="modal-overlay active">
+          <div className="glass-panel modal-content !max-w-[620px] !p-6" onClick={e => e.stopPropagation()}>
+            <div className="modal-header !mb-5">
+              <div className="modal-title !text-lg">{t("account_package_import")}</div>
+              <div className="modal-close" onClick={() => setShowImportDialog(false)}><X weight="bold" /></div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="account-package-format-box">
+                <div className="text-xs font-bold text-main/70">{t("account_package_supported")}</div>
+                <div className="text-[11px] text-main/45 mt-1 leading-relaxed">
+                  {t("account_package_supported_desc")}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] mb-1">{t("account_package_zip")}</label>
+                <input
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="!py-2.5 !px-4 !mb-3"
+                  onChange={(e) => {
+                    setImportPackageFile(e.target.files?.[0] || null);
+                    setImportResults([]);
+                  }}
+                  disabled={importingPackage}
+                />
+                {importPackageFile ? (
+                  <div className="text-[11px] text-main/45 truncate">
+                    {importPackageFile.name} ({Math.ceil(importPackageFile.size / 1024)} KB)
+                  </div>
+                ) : null}
+              </div>
+
+              <label className="account-package-checkbox">
+                <input
+                  type="checkbox"
+                  checked={importOverwrite}
+                  onChange={(e) => setImportOverwrite(e.target.checked)}
+                  disabled={importingPackage}
+                />
+                <span>
+                  <strong>{t("account_package_overwrite")}</strong>
+                  <small>{t("account_package_overwrite_desc")}</small>
+                </span>
+              </label>
+
+              {importResults.length > 0 ? (
+                <div className="account-package-results">
+                  <div className="text-xs font-bold text-main/70 mb-2">{t("account_package_import_results")}</div>
+                  <div className="account-package-result-list">
+                    {importResults.map((item, index) => (
+                      <div key={`${item.account_name}-${index}`} className="account-package-result-row">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate">{item.account_name || item.source || "-"}</div>
+                          <div className="text-[10px] text-main/35 truncate">{item.format} · {item.source}</div>
+                        </div>
+                        <div className={`account-package-status account-package-status-${item.status}`}>
+                          {item.status === "success"
+                            ? t("success")
+                            : item.status === "skipped"
+                              ? t("account_package_skipped")
+                              : t("failure")}
+                        </div>
+                        <div className="text-[11px] text-main/45 truncate" title={item.message}>{item.message}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex gap-3 mt-6">
+                <button className="btn-secondary flex-1 h-10 !py-0 !text-xs" onClick={() => setShowImportDialog(false)} disabled={importingPackage}>
+                  {t("close")}
+                </button>
+                <button
+                  className="btn-gradient flex-1 h-10 !py-0 !text-xs"
+                  onClick={handleImportPackage}
+                  disabled={!importPackageFile || importingPackage}
+                >
+                  {importingPackage ? <Spinner className="animate-spin" /> : t("execute_import")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddDialog && (
         <div className="modal-overlay active">

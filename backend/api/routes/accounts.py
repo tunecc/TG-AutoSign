@@ -10,11 +10,13 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from backend.core.auth import get_current_user
 from backend.models.user import User
+from backend.services.account_packages import get_account_package_service
 from backend.services.telegram import get_telegram_service
 
 router = APIRouter()
@@ -193,6 +195,25 @@ class AccountStatusCheckResponse(BaseModel):
     """批量账号状态检测响应"""
 
     results: list[AccountStatusItem]
+
+
+class AccountPackageImportItem(BaseModel):
+    """账号包导入单项结果"""
+
+    account_name: str
+    source: str
+    format: str
+    status: str
+    message: str
+
+
+class AccountPackageImportResponse(BaseModel):
+    """账号包导入结果"""
+
+    success_count: int
+    failure_count: int
+    skipped_count: int
+    items: list[AccountPackageImportItem]
 
 
 # ============ API Routes ============
@@ -456,6 +477,75 @@ async def check_accounts_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"账号状态检测失败: {str(e)}",
+        )
+
+
+@router.post("/import", response_model=AccountPackageImportResponse)
+async def import_account_package(
+    file: UploadFile = File(...),
+    overwrite: bool = False,
+    current_user: User = Depends(get_current_user),
+):
+    """导入 Telethon/TData 账号 Zip 包。"""
+    filename = file.filename or ""
+    if not filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="仅支持 .zip 账号包")
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="上传文件为空")
+        result = await get_account_package_service().import_zip(
+            content,
+            overwrite=overwrite,
+        )
+        try:
+            get_telegram_service().list_accounts(force_refresh=True)
+        except Exception:
+            pass
+        return AccountPackageImportResponse(
+            success_count=result.success_count,
+            failure_count=result.failure_count,
+            skipped_count=result.skipped_count,
+            items=[AccountPackageImportItem(**item.__dict__) for item in result.items],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("账号包导入失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"账号包导入失败: {str(e)}",
+        )
+
+
+@router.get("/export")
+async def export_account_package(
+    format: str = Query("telethon", regex="^(telethon|tdata)$"),
+    account_names: Optional[list[str]] = Query(None),
+    current_user: User = Depends(get_current_user),
+):
+    """导出账号 Zip 包，支持 telethon 与 tdata 两种格式。"""
+    try:
+        zip_bytes = await get_account_package_service().export_zip(
+            account_names=account_names,
+            format=format,
+        )
+        suffix = "tdata" if format == "tdata" else "telethon"
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="tg-autosign-accounts-{suffix}.zip"'
+                ),
+                "Cache-Control": "no-store",
+            },
+        )
+    except Exception as e:
+        logger.exception("账号包导出失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"账号包导出失败: {str(e)}",
         )
 
 
@@ -753,8 +843,6 @@ def export_account_logs(
     account_name: str, current_user: User = Depends(get_current_user)
 ):
     """导出账号日志为 txt 文件"""
-    from fastapi.responses import Response
-
     from backend.services.sign_tasks import get_sign_task_service
 
     history = get_sign_task_service().get_account_history_logs(account_name)

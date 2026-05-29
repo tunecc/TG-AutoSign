@@ -26,6 +26,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential tzdata gosu && \
   rm -rf /var/lib/apt/lists/*
 
+# Reuse Node 20 from the frontend builder for tdata conversion at runtime.
+COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=frontend-builder /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+  ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
 # Copy minimal metadata first for better layer caching.
 COPY pyproject.toml ./
 COPY tg_signer/__init__.py ./tg_signer/__init__.py
@@ -56,6 +62,13 @@ RUN if [ "${TARGETPLATFORM:-}" = "linux/amd64" ] || [ "$(uname -m)" = "x86_64" ]
   else \
     echo "Skipping tgcrypto on ${TARGETPLATFORM:-unknown}"; \
   fi
+
+# Preinstall the tdata conversion runtime used by account import/export.
+RUN mkdir -p /opt/tg-autosign-tdata-runtime && \
+  printf '{"name":"tg-autosign-tdata-runtime","private":true,"type":"module"}\n' > /opt/tg-autosign-tdata-runtime/package.json && \
+  cd /opt/tg-autosign-tdata-runtime && \
+  npm install --silent --no-audit --no-fund @mtcute/convert @mtcute/node && \
+  npm cache clean --force
 
 # Frontend static files served from /web.
 RUN mkdir -p /web

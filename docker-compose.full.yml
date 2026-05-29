@@ -4,7 +4,7 @@ services:
   app:
     # ===== 镜像来源 =====
     # 默认使用 GHCR 镜像；如果你要本地构建，注释 image 并取消 build
-    image: ghcr.io/lyc1466/tg-autosign:latest
+    image: ghcr.io/tunecc/tg-autosign:latest
     # build: .
 
     container_name: tg-autosign
@@ -72,6 +72,9 @@ services:
 
       # 共享代理地址，例如 socks5://127.0.0.1:1080
       # - TG_PROXY=socks5://127.0.0.1:1080
+
+      # TData 导入/导出转换依赖目录；官方镜像默认已内置，通常无需设置
+      # - TG_TDATA_RUNTIME_DIR=/data/tdata-runtime
 
       # 自定义设备型号，默认 Samsung Galaxy S24
       # - TG_DEVICE_MODEL=Samsung Galaxy S24

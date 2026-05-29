@@ -215,6 +215,23 @@ export interface AccountStatusCheckResponse {
   results: AccountStatusItem[];
 }
 
+export type AccountPackageFormat = "telethon" | "tdata";
+
+export interface AccountPackageImportItem {
+  account_name: string;
+  source: string;
+  format: string;
+  status: "success" | "failed" | "skipped" | string;
+  message: string;
+}
+
+export interface AccountPackageImportResponse {
+  success_count: number;
+  failure_count: number;
+  skipped_count: number;
+  items: AccountPackageImportItem[];
+}
+
 export const startAccountLogin = (token: string, data: LoginStartRequest) =>
   request<LoginStartResponse>("/accounts/login/start", {
     method: "POST",
@@ -281,6 +298,59 @@ export const submitQrPassword = (token: string, data: QrLoginPasswordRequest) =>
     method: "POST",
     body: JSON.stringify(data),
   }, token);
+
+export const importAccountPackage = async (
+  token: string,
+  file: File,
+  overwrite = false
+): Promise<AccountPackageImportResponse> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/accounts/import?overwrite=${overwrite ? "true" : "false"}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let errorMessage = "Import failed";
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+    } catch {
+      errorMessage = await res.text() || "Import failed";
+    }
+    throw new Error(errorMessage);
+  }
+  return res.json();
+};
+
+export const exportAccountPackage = async (
+  token: string,
+  format: AccountPackageFormat,
+  accountNames?: string[]
+): Promise<Blob> => {
+  const params = new URLSearchParams();
+  params.append("format", format);
+  if (accountNames?.length) {
+    accountNames.forEach((name) => params.append("account_names", name));
+  }
+  const res = await fetch(`${API_BASE}/accounts/export?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let errorMessage = "Export failed";
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+    } catch {
+      errorMessage = await res.text() || "Export failed";
+    }
+    throw new Error(errorMessage);
+  }
+  return res.blob();
+};
 
 // ============ 任务管理 ============
 

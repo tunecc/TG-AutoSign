@@ -22,6 +22,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full update history.
 ## Capabilities
 
 - Manage multiple Telegram accounts in one place
+- Import and export account packages in Telethon-compatible and Telegram Desktop TData formats
 - Automate sign-ins, scheduled messages, and button actions
 - Use AI Vision and AI Calculate actions in workflows
 - Inspect logs, structured message history, and account states from a web panel
@@ -153,6 +154,18 @@ ls -ld /data
 touch /data/.probe && rm /data/.probe
 ```
 
+## Account Package Import And Export
+
+The account page toolbar provides “Import Accounts”, “Export Telethon”, and “Export TData”. These Zip packages contain Telegram login sessions, so store them as sensitive files.
+
+Supported import formats:
+
+- Telethon-compatible packages: one folder per account containing `.json` and `.session`; compatible with independent WTelegram sessions exported by Telegram-Panel, Telethon/Pyrogram SQLite sessions, and JSON `session_string`.
+- TData packages: a Zip containing a `tdata/` directory, either as a single-account package or multiple account folders.
+- Optional `2fa.txt` / `password.txt` files are stored as private account metadata for migration use.
+
+Imports skip same-name accounts by default. Enable “Allow overwrite” in the import dialog to replace existing sessions. TData import/export requires Node plus `@mtcute/convert`; the official image preinstalls them. Source runs install them on first use into `TG_TDATA_RUNTIME_DIR`, or into `tdata-runtime` under the data directory when unset.
+
 ## Health Checks
 
 - `GET /healthz`: quick health check
@@ -225,6 +238,7 @@ Telegram API credentials support a “use env on first boot, then prefer UI afte
 | `TG_API_ID` | `123456` (example) | Telegram API ID used for initial bootstrapping when the UI has not saved Telegram API settings yet |
 | `TG_API_HASH` | `your_api_hash_here` | Telegram API hash used for initial bootstrapping when the UI has not saved Telegram API settings yet |
 | `TG_PROXY` | `socks5://127.0.0.1:1080` | Shared proxy URL |
+| `TG_TDATA_RUNTIME_DIR` | `/data/tdata-runtime` (example) | Install directory for TData conversion dependencies; official images use the built-in runtime by default |
 | `TG_DEVICE_MODEL` | `Samsung Galaxy S24` | Custom device model |
 | `TG_SYSTEM_VERSION` | `SDK 35` | Custom system version |
 | `TG_APP_VERSION` | `11.4.2` | Custom app version |
