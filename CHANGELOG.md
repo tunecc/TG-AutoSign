@@ -3,6 +3,10 @@
 本文件记录当前维护分支的重要功能、修复、配置、部署与文档变更。
 This file records important feature, fix, configuration, deployment, and documentation changes for the current maintained branch.
 
+## 2026-05-29
+
+- 新增 / Added: 代理配置支持 HTTP/HTTPS 等协议格式；前端代理输入增加实时格式校验，覆盖手机号登录、二维码登录与账号编辑三个入口，非法端口或格式会立即提示；同步更新 CLI help、环境变量注释与 UI 文案 / Add HTTP/HTTPS proxy format support; add client-side proxy format validation in phone login, QR login, and account-edit forms with immediate error feedback; update CLI help, env example comments, and UI labels.
+
 ## 2026-05-07
 
 - 修复 / Fixed: 普通任务调度器在执行失败时不再只输出 `INFO` 级别的"执行结束"日志，而是正确输出 `ERROR` 并携带错误详情；同时增加异常边界捕获，防止逃逸异常丢失在 APScheduler 层 / Log regular task scheduling failures at `ERROR` level with error details instead of a generic `INFO` completion message, and add an outer exception boundary so escaped errors are also captured.

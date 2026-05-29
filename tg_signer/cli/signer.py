@@ -91,7 +91,7 @@ def get_signer(
     show_default=True,
     show_envvar=True,
     envvar="TG_PROXY",
-    help="代理地址, 例如: socks5://127.0.0.1:1080, 会覆盖环境变量`TG_PROXY`的值",
+    help="代理地址, 例如: socks5://127.0.0.1:1080 或 http://127.0.0.1:1080, 会覆盖环境变量`TG_PROXY`的值",
 )
 @click.option(
     "--session_dir",

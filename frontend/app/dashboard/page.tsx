@@ -135,6 +135,26 @@ export default function Dashboard() {
   const sanitizeAccountName = (name: string) =>
     name.replace(/[^A-Za-z0-9\u4e00-\u9fff]/g, "");
 
+  const validateProxy = (proxy: string): boolean => {
+    if (!proxy.trim()) return true;
+    const v = proxy.trim();
+    if (!v.includes("://") && !v.includes("@") && !v.includes("[")) {
+      const parts = v.split(":");
+      if (parts.length === 2 || parts.length === 4) {
+        const port = parseInt(parts[1], 10);
+        return port > 0 && port <= 65535 && parts[0].length > 0;
+      }
+    }
+    try {
+      const urlStr = v.includes("://") ? v : `http://${v}`;
+      const url = new URL(urlStr);
+      const port = parseInt(url.port, 10);
+      return url.hostname.length > 0 && port > 0 && port <= 65535;
+    } catch {
+      return false;
+    }
+  };
+
   const isDuplicateAccountName = useCallback((name: string, allowedSameName?: string | null) => {
     const normalized = normalizeAccountName(name).toLowerCase();
     if (!normalized) return false;
@@ -371,6 +391,10 @@ export default function Dashboard() {
       addToast(t("account_name_duplicate"), "error");
       return;
     }
+    if (!validateProxy(loginData.proxy)) {
+      addToast(t("proxy_invalid"), "error");
+      return;
+    }
     try {
       setLoading(true);
       const res = await startAccountLogin(token, {
@@ -400,6 +424,10 @@ export default function Dashboard() {
     }
     if (isDuplicateAccountName(trimmedAccountName, reloginAccountName)) {
       addToast(t("account_name_duplicate"), "error");
+      return;
+    }
+    if (!validateProxy(loginData.proxy)) {
+      addToast(t("proxy_invalid"), "error");
       return;
     }
     try {
@@ -483,6 +511,10 @@ export default function Dashboard() {
   const handleSaveEdit = async () => {
     if (!token) return;
     if (!editData.account_name) return;
+    if (!validateProxy(editData.proxy)) {
+      addToast(t("proxy_invalid"), "error");
+      return;
+    }
     try {
       setLoading(true);
       await updateAccount(token, editData.account_name, {
@@ -614,6 +646,12 @@ export default function Dashboard() {
     if (isDuplicateAccountName(trimmedAccountName, reloginAccountName)) {
       if (!options?.silent) {
         addToast(t("account_name_duplicate"), "error");
+      }
+      return null;
+    }
+    if (!validateProxy(loginData.proxy)) {
+      if (!options?.silent) {
+        addToast(t("proxy_invalid"), "error");
       }
       return null;
     }
