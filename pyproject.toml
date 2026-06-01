@@ -33,7 +33,7 @@ dependencies = [
     "python-multipart",
     "pyotp",
     "passlib[bcrypt]",
-    "bcrypt",
+    "bcrypt==4.0.1",
     "qrcode[pil]",
 ]
 

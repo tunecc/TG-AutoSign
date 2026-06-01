@@ -65,6 +65,8 @@ docker run -d \
   ghcr.io/lyc1466/tg-autosign:latest
 ```
 
+正式发布会同时提供 `vX.Y.Z` 版本标签；如果需要固定版本，可将 `latest` 替换为对应版本，例如 `v0.8.5`。
+
 如果你使用反向代理，建议仅监听本机：
 
 ```bash

@@ -44,7 +44,6 @@ import {
     Copy,
     ClipboardText,
     Export,
-    UploadSimple,
 } from "@phosphor-icons/react";
 import { ToastContainer, useToast } from "../../../components/ui/toast";
 import { SignTaskFlowLogLine } from "../../../components/SignTaskFlowLogLine";
@@ -333,10 +332,7 @@ export default function AccountTasksContent() {
     const [pasteTaskConfigInput, setPasteTaskConfigInput] = useState("");
     const [copyingConfig, setCopyingConfig] = useState(false);
     const [importingPastedConfig, setImportingPastedConfig] = useState(false);
-    const [showBatchImportDialog, setShowBatchImportDialog] = useState(false);
-    const [batchImportJson, setBatchImportJson] = useState("");
     const [batchImportOverwrite, setBatchImportOverwrite] = useState(false);
-    const [batchImporting, setBatchImporting] = useState(false);
 
     const [checking, setChecking] = useState(true);
     const [runningTaskName, setRunningTaskName] = useState<string | null>(null);
@@ -353,13 +349,13 @@ export default function AccountTasksContent() {
     const aiVisionClickModeLabel = isZh ? "\u8BC6\u56FE\u540E\u70B9\u6309\u94AE" : "Vision -> Click Button";
     const aiCalcSendModeLabel = isZh ? "\u8BA1\u7B97\u540E\u53D1\u6587\u672C" : "Math -> Send Text";
     const aiCalcClickModeLabel = isZh ? "\u8BA1\u7B97\u540E\u70B9\u6309\u94AE" : "Math -> Click Button";
-    const pasteTaskTitle = isZh ? "\u7C98\u8D34\u5BFC\u5165\u4EFB\u52A1" : "Paste Task";
+    const pasteTaskTitle = isZh ? "\u7C98\u8D34\u5BFC\u5165\u4EFB\u52A1" : "Paste Tasks";
     const copyTaskDialogTitle = isZh ? "\u590D\u5236\u4EFB\u52A1\u914D\u7F6E" : "Copy Task Config";
     const copyTaskDialogDesc = isZh ? "\u4EE5\u4E0B\u662F\u4EFB\u52A1\u914D\u7F6E\uFF0C\u53EF\u624B\u52A8\u590D\u5236\u6216\u70B9\u51FB\u4E00\u952E\u590D\u5236\u3002" : "Task config is ready. Copy manually or use one-click copy.";
     const copyConfigAction = isZh ? "\u4E00\u952E\u590D\u5236" : "Copy";
     const pasteTaskDialogTitle = isZh ? "\u7C98\u8D34\u5BFC\u5165\u4EFB\u52A1" : "Paste Task Config";
-    const pasteTaskDialogDesc = isZh ? "\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u4E0B\u65B9\u7C98\u8D34\u914D\u7F6E\u540E\u5BFC\u5165\u3002" : "Clipboard read failed. Paste config below and import.";
-    const pasteTaskDialogPlaceholder = isZh ? "\u5728\u6B64\u7C98\u8D34\u4EFB\u52A1\u914D\u7F6E JSON..." : "Paste task config JSON here...";
+    const pasteTaskDialogDesc = isZh ? "\u7C98\u8D34\u5355\u4E2A\u4EFB\u52A1\u6216\u3010\u6279\u91CF\u5BFC\u51FA\u5168\u90E8\u4EFB\u52A1\u3011\u5F97\u5230\u7684 JSON\uFF0C\u7CFB\u7EDF\u4F1A\u81EA\u52A8\u8BC6\u522B\u683C\u5F0F\u3002" : "Paste a single task JSON or the JSON from Export all tasks. The format is detected automatically.";
+    const pasteTaskDialogPlaceholder = isZh ? "\u5728\u6B64\u7C98\u8D34\u5355\u4EFB\u52A1\u6216\u591A\u4EFB\u52A1 JSON..." : "Paste single-task or multi-task JSON here...";
     const importTaskAction = isZh ? "\u5BFC\u5165\u4EFB\u52A1" : "Import Task";
     const clipboardReadFailed = isZh ? "\u65E0\u6CD5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u5DF2\u5207\u6362\u4E3A\u624B\u52A8\u7C98\u8D34\u5BFC\u5165" : "Clipboard read failed, switched to manual paste import";
     const copyTaskSuccess = (taskName: string) =>
@@ -671,6 +667,39 @@ export default function AccountTasksContent() {
 
         try {
             setLoading(true);
+            let parsed: any = null;
+            try {
+                parsed = JSON.parse(taskConfig);
+            } catch {
+                parsed = null;
+            }
+
+            const isBatchConfig = Boolean(
+                parsed &&
+                typeof parsed === "object" &&
+                (parsed.task_type === "sign-batch" || Array.isArray(parsed.tasks))
+            );
+
+            if (isBatchConfig) {
+                const result = await importSignTasks(token, taskConfig, accountName, batchImportOverwrite);
+                const importErrors = Array.isArray(result.errors) ? result.errors : [];
+                if (importErrors.length > 0) {
+                    const errorSummary = importErrors.slice(0, 3).join("; ");
+                    addToast(
+                        result.message ||
+                        (isZh
+                            ? `批量导入存在问题：${errorSummary}`
+                            : `Batch import completed with errors: ${errorSummary}`),
+                        "error"
+                    );
+                    await loadData(token);
+                    return { ok: result.imported > 0, error: errorSummary };
+                }
+                addToast(result.message || (isZh ? "批量导入完成" : "Batch import done"), "success");
+                await loadData(token);
+                return { ok: true };
+            }
+
             const result = await importSignTask(token, taskConfig, undefined, accountName);
             addToast(pasteTaskSuccess(result.task_name), "success");
             await loadData(token);
@@ -750,6 +779,7 @@ export default function AccountTasksContent() {
         if (result.ok) {
             setShowPasteDialog(false);
             setPasteTaskConfigInput("");
+            setBatchImportOverwrite(false);
         }
         setImportingPastedConfig(false);
     };
@@ -777,6 +807,7 @@ export default function AccountTasksContent() {
         }
 
         setPasteTaskConfigInput("");
+        setBatchImportOverwrite(false);
         setShowPasteDialog(true);
     };
 
@@ -793,6 +824,7 @@ export default function AccountTasksContent() {
         }
         setShowPasteDialog(false);
         setPasteTaskConfigInput("");
+        setBatchImportOverwrite(false);
     };
 
     const handleExportAllTasks = async () => {
@@ -819,50 +851,6 @@ export default function AccountTasksContent() {
             );
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleBatchImportOpen = () => {
-        setBatchImportJson("");
-        setBatchImportOverwrite(false);
-        setShowBatchImportDialog(true);
-    };
-
-    const handleBatchImport = async () => {
-        if (!token) return;
-        const json = batchImportJson.trim();
-        if (!json) {
-            addToast(isZh ? "请输入批量配置 JSON" : "Please paste batch config JSON", "error");
-            return;
-        }
-        try {
-            setBatchImporting(true);
-            const result = await importSignTasks(token, json, accountName, batchImportOverwrite);
-            const importErrors = Array.isArray(result.errors) ? result.errors : [];
-            if (importErrors.length > 0) {
-                const errorSummary = importErrors.slice(0, 3).join("; ");
-                addToast(
-                    result.message ||
-                        (isZh
-                            ? `批量导入存在问题：${errorSummary}`
-                            : `Batch import completed with errors: ${errorSummary}`),
-                    "error"
-                );
-            } else {
-                addToast(result.message || (isZh ? "批量导入完成" : "Batch import done"), "success");
-                setShowBatchImportDialog(false);
-                setBatchImportJson("");
-            }
-            await loadData(token);
-        } catch (err: any) {
-            addToast(
-                err?.message
-                    ? (isZh ? `导入失败：${err.message}` : `Import failed: ${err.message}`)
-                    : (isZh ? "导入失败" : "Import failed"),
-                "error"
-            );
-        } finally {
-            setBatchImporting(false);
         }
     };
 
@@ -1080,26 +1068,20 @@ export default function AccountTasksContent() {
                     <button
                         onClick={handleExportAllTasks}
                         disabled={loading}
-                        className="action-btn !w-8 !h-8 !text-amber-400 hover:bg-amber-500/10"
+                        className="action-btn !w-auto !h-8 !px-3 gap-1.5 !text-amber-400 hover:bg-amber-500/10"
                         title={isZh ? "批量导出全部任务" : "Export all tasks"}
                     >
                         <Export weight="bold" size={18} />
-                    </button>
-                    <button
-                        onClick={handleBatchImportOpen}
-                        disabled={loading}
-                        className="action-btn !w-8 !h-8 !text-teal-400 hover:bg-teal-500/10"
-                        title={isZh ? "批量导入任务" : "Batch import tasks"}
-                    >
-                        <UploadSimple weight="bold" size={18} />
+                        <span className="hidden sm:inline text-[10px] font-bold">{isZh ? "批量导出" : "Export"}</span>
                     </button>
                     <button
                         onClick={handlePasteTask}
                         disabled={loading}
-                        className="action-btn !w-8 !h-8 !text-sky-400 hover:bg-sky-500/10"
+                        className="action-btn !w-auto !h-8 !px-3 gap-1.5 !text-sky-400 hover:bg-sky-500/10"
                         title={pasteTaskTitle}
                     >
                         <ClipboardText weight="bold" size={18} />
+                        <span className="hidden sm:inline text-[10px] font-bold">{isZh ? "粘贴导入" : "Paste"}</span>
                     </button>
                     <button onClick={() => setShowCreateDialog(true)} className="action-btn !w-8 !h-8 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10" title={t("add_task")}>
                         <Plus weight="bold" size={18} />
@@ -1597,6 +1579,18 @@ export default function AccountTasksContent() {
                                 value={pasteTaskConfigInput}
                                 onChange={(e) => setPasteTaskConfigInput(e.target.value)}
                             />
+                            <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={batchImportOverwrite}
+                                    onChange={(e) => setBatchImportOverwrite(e.target.checked)}
+                                    disabled={importingPastedConfig || loading}
+                                    className="w-4 h-4 rounded"
+                                />
+                                <span className="text-main/60">
+                                    {isZh ? "多任务 JSON 导入时覆盖已存在的同名任务" : "Overwrite existing tasks when importing multi-task JSON"}
+                                </span>
+                            </label>
                         </div>
                         <footer className="p-5 border-t border-white/5 flex gap-3">
                             <button
@@ -1612,62 +1606,6 @@ export default function AccountTasksContent() {
                                 disabled={importingPastedConfig || loading}
                             >
                                 {importingPastedConfig ? <Spinner className="animate-spin" /> : importTaskAction}
-                            </button>
-                        </footer>
-                    </div>
-                </div>
-            )}
-
-            {showBatchImportDialog && (
-                <div className="modal-overlay active">
-                    <div className="glass-panel modal-content !max-w-3xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-                        <header className="modal-header border-b border-white/5 pb-3 mb-0">
-                            <div className="modal-title flex items-center gap-2 !text-base">
-                                <UploadSimple weight="bold" size={18} />
-                                {isZh ? "批量导入任务" : "Batch Import Tasks"}
-                            </div>
-                            <button onClick={() => { if (!batchImporting) { setShowBatchImportDialog(false); setBatchImportJson(""); } }} className="modal-close" disabled={batchImporting}>
-                                <X weight="bold" />
-                            </button>
-                        </header>
-                        <div className="p-5 space-y-3">
-                            <p className="text-xs text-main/60">
-                                {isZh
-                                    ? "粘贴通过【批量导出】获得的 JSON，点击导入将所有任务导入到当前账号。"
-                                    : "Paste the JSON obtained from the batch export, then click import to add all tasks to the current account."}
-                            </p>
-                            <textarea
-                                className="w-full h-64 !mb-0 font-mono text-xs"
-                                placeholder={isZh ? "在此粘贴批量任务配置 JSON..." : "Paste batch task config JSON here..."}
-                                value={batchImportJson}
-                                onChange={(e) => setBatchImportJson(e.target.value)}
-                                disabled={batchImporting}
-                            />
-                            <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    checked={batchImportOverwrite}
-                                    onChange={(e) => setBatchImportOverwrite(e.target.checked)}
-                                    disabled={batchImporting}
-                                    className="w-4 h-4 rounded"
-                                />
-                                <span className="text-main/60">{isZh ? "覆盖已存在的同名任务" : "Overwrite existing tasks with the same name"}</span>
-                            </label>
-                        </div>
-                        <footer className="p-5 border-t border-white/5 flex gap-3">
-                            <button
-                                className="btn-secondary flex-1"
-                                onClick={() => { setShowBatchImportDialog(false); setBatchImportJson(""); }}
-                                disabled={batchImporting}
-                            >
-                                {t("cancel")}
-                            </button>
-                            <button
-                                className="btn-gradient flex-1"
-                                onClick={handleBatchImport}
-                                disabled={batchImporting}
-                            >
-                                {batchImporting ? <Spinner className="animate-spin" /> : (isZh ? "批量导入" : "Import")}
                             </button>
                         </footer>
                     </div>

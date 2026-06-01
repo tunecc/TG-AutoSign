@@ -30,6 +30,40 @@ import { ThemeLanguageToggle } from "../../../../components/ThemeLanguageToggle"
 import { useLanguage } from "../../../../context/LanguageContext";
 import { ToastContainer, useToast } from "../../../../components/ui/toast";
 
+type ScheduleMode = "fixed" | "range";
+
+type AccountScheduleRow = {
+    account_name: string;
+    selected: boolean;
+    execution_mode: ScheduleMode;
+    fixed_time: string;
+    range_start: string;
+    range_end: string;
+};
+
+const padTimePart = (value: number) => value.toString().padStart(2, "0");
+
+const addMinutesToClock = (value: string, minutesToAdd: number) => {
+    const [rawHour, rawMinute] = value.split(":");
+    const hour = Number(rawHour);
+    const minute = Number(rawMinute);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+        return value;
+    }
+    const totalMinutes = (((hour * 60 + minute + minutesToAdd) % 1440) + 1440) % 1440;
+    return `${padTimePart(Math.floor(totalMinutes / 60))}:${padTimePart(totalMinutes % 60)}`;
+};
+
+const fixedTimeToCron = (value: string) => {
+    const [rawHour, rawMinute] = value.split(":");
+    const hour = Number(rawHour);
+    const minute = Number(rawMinute);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+        return "";
+    }
+    return `0 ${minute} ${hour} * * *`;
+};
+
 export default function CreateSignTaskPage() {
     const router = useRouter();
     const { t } = useLanguage();
@@ -41,7 +75,7 @@ export default function CreateSignTaskPage() {
     // 表单数据
     const [taskName, setTaskName] = useState("");
     const [executionMode, setExecutionMode] = useState<"fixed" | "range">("range");
-    const [signAt, setSignAt] = useState("0 6 * * *");
+    const [signAt, setSignAt] = useState("06:00");
     const [rangeStart, setRangeStart] = useState("09:00");
     const [rangeEnd, setRangeEnd] = useState("18:00");
     const [randomSeconds, setRandomSeconds] = useState(0);
@@ -52,6 +86,8 @@ export default function CreateSignTaskPage() {
     // 账号和 Chat 数据
     const [accounts, setAccounts] = useState<AccountInfo[]>([]);
     const [selectedAccount, setSelectedAccount] = useState("");
+    const [accountSchedules, setAccountSchedules] = useState<AccountScheduleRow[]>([]);
+    const [staggerMinutes, setStaggerMinutes] = useState(5);
     const [availableChats, setAvailableChats] = useState<ChatInfo[]>([]);
     const [chatSearch, setChatSearch] = useState("");
     const [chatSearchResults, setChatSearchResults] = useState<ChatInfo[]>([]);
@@ -74,7 +110,7 @@ export default function CreateSignTaskPage() {
     const resetForm = useCallback(() => {
         setTaskName("");
         setExecutionMode("range");
-        setSignAt("0 6 * * *");
+        setSignAt("06:00");
         setRangeStart("09:00");
         setRangeEnd("18:00");
         setRandomSeconds(0);
@@ -115,6 +151,14 @@ export default function CreateSignTaskPage() {
         try {
             const data = await listAccounts(tokenStr);
             setAccounts(data.accounts);
+            setAccountSchedules(data.accounts.map((account, index) => ({
+                account_name: account.name,
+                selected: index === 0,
+                execution_mode: "range",
+                fixed_time: "06:00",
+                range_start: "09:00",
+                range_end: "18:00",
+            })));
             if (data.accounts.length > 0) {
                 setSelectedAccount(data.accounts[0].name);
                 loadChats(tokenStr, data.accounts[0].name);
@@ -208,17 +252,67 @@ export default function CreateSignTaskPage() {
         setEditingChat(null);
     };
 
+    const selectedAccountCount = accountSchedules.filter(row => row.selected).length;
+
+    const updateAccountSchedule = (
+        accountName: string,
+        updater: (row: AccountScheduleRow) => AccountScheduleRow
+    ) => {
+        setAccountSchedules(prev => prev.map(row => (
+            row.account_name === accountName ? updater(row) : row
+        )));
+    };
+
+    const setAllAccountsSelected = (selected: boolean) => {
+        setAccountSchedules(prev => prev.map(row => ({ ...row, selected })));
+    };
+
+    const applyStaggerRule = () => {
+        const selectedNames = accountSchedules
+            .filter(row => row.selected)
+            .map(row => row.account_name);
+        const selectedNameSet = new Set(selectedNames);
+        const interval = Number.isFinite(staggerMinutes) ? staggerMinutes : 0;
+
+        setAccountSchedules(prev => {
+            let selectedIndex = 0;
+            return prev.map(row => {
+                if (!selectedNameSet.has(row.account_name)) return row;
+                const offset = selectedIndex * interval;
+                selectedIndex += 1;
+                if (executionMode === "fixed") {
+                    return {
+                        ...row,
+                        execution_mode: "fixed",
+                        fixed_time: addMinutesToClock(signAt, offset),
+                    };
+                }
+                return {
+                    ...row,
+                    execution_mode: "range",
+                    range_start: addMinutesToClock(rangeStart, offset),
+                    range_end: addMinutesToClock(rangeEnd, offset),
+                };
+            });
+        });
+    };
+
     const handleSubmit = async () => {
         if (!token) return;
         if (!taskName) {
             addToast(t("task_name_required"), "error");
             return;
         }
-        if (executionMode === "fixed" && !signAt) {
-            addToast(t("cron_required"), "error");
+        const selectedSchedules = accountSchedules.filter(row => row.selected);
+        if (selectedSchedules.length === 0) {
+            addToast(t("no_account_selected"), "error");
             return;
         }
-        if (executionMode === "range" && (!rangeStart || !rangeEnd)) {
+        if (selectedSchedules.some(row => row.execution_mode === "fixed" && !row.fixed_time)) {
+            addToast(t("fixed_time_required"), "error");
+            return;
+        }
+        if (selectedSchedules.some(row => row.execution_mode === "range" && (!row.range_start || !row.range_end))) {
             addToast(t("range_required"), "error");
             return;
         }
@@ -229,19 +323,48 @@ export default function CreateSignTaskPage() {
 
         try {
             setLoading(true);
-            await createSignTask(token, {
-                name: taskName,
-                account_name: selectedAccount,
-                sign_at: executionMode === "fixed" ? signAt : "0 0 * * *", // 占位，后端会处理
-                chats: chats,
-                random_seconds: randomSeconds,
-                sign_interval: signInterval,
-                execution_mode: executionMode,
-                range_start: rangeStart,
-                range_end: rangeEnd,
-            });
-            addToast(t("create_success"), "success");
-            setTimeout(() => router.push("/dashboard/sign-tasks"), 1500);
+            const errors: string[] = [];
+            let created = 0;
+
+            for (const schedule of selectedSchedules) {
+                try {
+                    const fixedCron = schedule.execution_mode === "fixed"
+                        ? fixedTimeToCron(schedule.fixed_time)
+                        : "0 0 * * *";
+                    if (schedule.execution_mode === "fixed" && !fixedCron) {
+                        errors.push(`${schedule.account_name}: ${t("fixed_time_required")}`);
+                        continue;
+                    }
+                    await createSignTask(token, {
+                        name: taskName,
+                        account_name: schedule.account_name,
+                        sign_at: fixedCron,
+                        chats: chats,
+                        random_seconds: randomSeconds,
+                        sign_interval: signInterval,
+                        execution_mode: schedule.execution_mode,
+                        range_start: schedule.range_start,
+                        range_end: schedule.range_end,
+                    });
+                    created += 1;
+                } catch (err: any) {
+                    errors.push(`${schedule.account_name}: ${err?.message || t("create_failed")}`);
+                }
+            }
+
+            if (errors.length > 0) {
+                const summary = errors.slice(0, 3).join("; ");
+                addToast(
+                    t("create_batch_partial")
+                        .replace("{created}", String(created))
+                        .replace("{failed}", String(errors.length))
+                        .replace("{errors}", summary),
+                    "error"
+                );
+            } else {
+                addToast(t("create_batch_success").replace("{count}", String(created)), "success");
+                setTimeout(() => router.push("/dashboard/sign-tasks"), 1000);
+            }
         } catch (err: any) {
             addToast(formatErrorMessage("create_failed", err), "error");
         } finally {
@@ -271,8 +394,8 @@ export default function CreateSignTaskPage() {
 
             <main className="flex-1 p-5 md:p-10 w-full max-w-[900px] mx-auto overflow-y-auto animate-float-up pb-20">
                 <header className="mb-10">
-                    <h1 className="text-3xl font-bold tracking-tight mb-2">{t("add_task")}</h1>
-                    <p className="text-[#9496a1] text-sm">{t("define_global_rules")}</p>
+                    <h1 className="text-3xl font-bold tracking-tight mb-2">{t("task_center")}</h1>
+                    <p className="text-[#9496a1] text-sm">{t("task_center_desc")}</p>
                 </header>
 
                 <div className="grid gap-8">
@@ -296,7 +419,7 @@ export default function CreateSignTaskPage() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("associated_account")}</label>
+                                <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("template_account")}</label>
                                 <select
                                     className="!mb-0"
                                     value={selectedAccount}
@@ -304,47 +427,181 @@ export default function CreateSignTaskPage() {
                                 >
                                     {accounts.map(acc => <option key={acc.name} value={acc.name}>{acc.name}</option>)}
                                 </select>
+                                <p className="text-[10px] text-main/30">{t("template_account_hint")}</p>
                             </div>
                         </div>
 
-                        {/* 调度模式 (Only Range Mode Displayed) */}
                         <div className="p-4 glass-panel !bg-black/5 space-y-4 border-white/5">
                             <div className="flex items-center justify-between mb-4">
                                 <label className="text-xs font-bold text-main/40 uppercase tracking-wider">
-                                    {t("scheduling_mode")}
+                                    {t("offset_rule")}
                                 </label>
                                 <div className="text-xs font-bold text-[#8a3ffc] bg-[#8a3ffc]/10 px-2 py-1 rounded">
-                                    {t("random_range_default")}
+                                    {selectedAccountCount} {t("selected_accounts")}
                                 </div>
                             </div>
 
                             <p className="text-xs text-[#9496a1] mb-4">
-                                {t("random_range_desc")}
+                                {t("schedule_hint")}
                             </p>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-fade-in">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("start_time")}</label>
-                                    <input
-                                        type="time"
+                                    <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("scheduling_mode")}</label>
+                                    <select
                                         className="!mb-0"
-                                        value={rangeStart}
-                                        onChange={(e) => setRangeStart(e.target.value)}
-                                    />
+                                        value={executionMode}
+                                        onChange={(e) => setExecutionMode(e.target.value as ScheduleMode)}
+                                    >
+                                        <option value="range">{t("random_range_recommend")}</option>
+                                        <option value="fixed">{t("fixed_time")}</option>
+                                    </select>
                                 </div>
+                                {executionMode === "fixed" ? (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("fixed_time")}</label>
+                                        <input
+                                            type="time"
+                                            className="!mb-0"
+                                            value={signAt}
+                                            onChange={(e) => setSignAt(e.target.value)}
+                                        />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("start_time")}</label>
+                                            <input
+                                                type="time"
+                                                className="!mb-0"
+                                                value={rangeStart}
+                                                onChange={(e) => setRangeStart(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("end_time")}</label>
+                                            <input
+                                                type="time"
+                                                className="!mb-0"
+                                                value={rangeEnd}
+                                                onChange={(e) => setRangeEnd(e.target.value)}
+                                            />
+                                        </div>
+                                    </>
+                                )}
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("end_time")}</label>
+                                    <label className="text-xs font-bold text-main/40 uppercase tracking-wider">{t("stagger_minutes")}</label>
                                     <input
-                                        type="time"
+                                        type="number"
+                                        min={0}
                                         className="!mb-0"
-                                        value={rangeEnd}
-                                        onChange={(e) => setRangeEnd(e.target.value)}
+                                        value={staggerMinutes}
+                                        onChange={(e) => setStaggerMinutes(Math.max(0, Number(e.target.value) || 0))}
                                     />
                                 </div>
                             </div>
+
+                            <button type="button" onClick={applyStaggerRule} className="btn-secondary !h-9 !px-4 !text-[11px]">
+                                {t("apply_stagger")}
+                            </button>
                         </div>
 
 
+                    </section>
+
+                    <section className="glass-panel p-6 space-y-5">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-[#8a3ffc]/10 rounded-lg text-[#b57dff]">
+                                    <Clock weight="fill" size={18} />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold">{t("account_schedule")}</h2>
+                                    <p className="text-xs text-main/40">{t("per_account_schedule")}</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setAllAccountsSelected(true)} className="btn-secondary !h-8 !px-3 !text-[10px]">
+                                    {t("select_all")}
+                                </button>
+                                <button type="button" onClick={() => setAllAccountsSelected(false)} className="btn-secondary !h-8 !px-3 !text-[10px]">
+                                    {t("clear_selection")}
+                                </button>
+                            </div>
+                        </div>
+
+                        {accountSchedules.length === 0 ? (
+                            <div className="py-8 text-center border-2 border-dashed border-white/5 rounded-2xl text-main/30 text-sm">
+                                {t("task_center_no_accounts")}
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto rounded-xl border border-white/5">
+                                <table className="w-full min-w-[720px] text-xs">
+                                    <thead className="bg-black/10 text-main/40 uppercase tracking-wider">
+                                        <tr>
+                                            <th className="text-left p-3 w-12"></th>
+                                            <th className="text-left p-3">{t("account")}</th>
+                                            <th className="text-left p-3">{t("mode")}</th>
+                                            <th className="text-left p-3">{t("trigger")}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {accountSchedules.map((row) => (
+                                            <tr key={row.account_name} className="border-t border-white/5">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={row.selected}
+                                                        onChange={(e) => updateAccountSchedule(row.account_name, item => ({ ...item, selected: e.target.checked }))}
+                                                        className="w-4 h-4"
+                                                    />
+                                                </td>
+                                                <td className="p-3 font-bold">{row.account_name}</td>
+                                                <td className="p-3">
+                                                    <select
+                                                        className="!mb-0 !h-9"
+                                                        value={row.execution_mode}
+                                                        disabled={!row.selected}
+                                                        onChange={(e) => updateAccountSchedule(row.account_name, item => ({ ...item, execution_mode: e.target.value as ScheduleMode }))}
+                                                    >
+                                                        <option value="range">{t("random_range_recommend")}</option>
+                                                        <option value="fixed">{t("fixed_time")}</option>
+                                                    </select>
+                                                </td>
+                                                <td className="p-3">
+                                                    {row.execution_mode === "fixed" ? (
+                                                        <input
+                                                            type="time"
+                                                            className="!mb-0 !h-9"
+                                                            value={row.fixed_time}
+                                                            disabled={!row.selected}
+                                                            onChange={(e) => updateAccountSchedule(row.account_name, item => ({ ...item, fixed_time: e.target.value }))}
+                                                        />
+                                                    ) : (
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <input
+                                                                type="time"
+                                                                className="!mb-0 !h-9"
+                                                                value={row.range_start}
+                                                                disabled={!row.selected}
+                                                                onChange={(e) => updateAccountSchedule(row.account_name, item => ({ ...item, range_start: e.target.value }))}
+                                                            />
+                                                            <input
+                                                                type="time"
+                                                                className="!mb-0 !h-9"
+                                                                value={row.range_end}
+                                                                disabled={!row.selected}
+                                                                onChange={(e) => updateAccountSchedule(row.account_name, item => ({ ...item, range_end: e.target.value }))}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </section>
 
                     {/* Chat 配置 */}

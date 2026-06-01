@@ -40,5 +40,6 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/tg-autosign:latest
             ghcr.io/${{ github.repository_owner }}/tg-autosign:${{ github.sha }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('ghcr.io/{0}/tg-autosign:{1}', github.repository_owner, github.ref_name) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

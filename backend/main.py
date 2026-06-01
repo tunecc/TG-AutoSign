@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sqlite3
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from tg_signer import __version__
 
 # Monkeypatch sqlite3.connect to increase default timeout
 _original_sqlite3_connect = sqlite3.connect
@@ -61,8 +64,11 @@ logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 settings = get_settings()
 configure_application_logging(settings.resolve_logs_dir())
+WEB_DIR = Path(os.environ.get("WEB_DIR", "/web"))
+if not WEB_DIR.exists():
+    WEB_DIR = Path(__file__).resolve().parents[1] / "frontend" / "out"
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
+app = FastAPI(title=settings.app_name, version=__version__)
 app.state.ready = False
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -103,7 +109,7 @@ def ready_check(response: Response) -> dict[str, str]:
 # 挂载 Next.js 静态资源
 app.mount(
     "/_next",
-    StaticFiles(directory="/web/_next"),
+    StaticFiles(directory=WEB_DIR / "_next"),
     name="nextjs_static",
 )
 
@@ -116,20 +122,19 @@ async def serve_spa(full_path: str):
     这样刷新页面时不会 404
     """
     # 检查是否是静态文件请求
-    web_dir = Path("/web")
-    file_path = web_dir / full_path
+    file_path = WEB_DIR / full_path
 
     # 如果文件存在且不是目录，直接返回文件
     if file_path.exists() and file_path.is_file():
         return FileResponse(file_path)
 
     # 尝试添加 .html 后缀（Next.js 导出通常会生成 .html 文件）
-    html_path = web_dir / f"{full_path}.html"
+    html_path = WEB_DIR / f"{full_path}.html"
     if html_path.exists() and html_path.is_file():
         return FileResponse(html_path)
 
     # 否则返回 index.html（SPA 路由）
-    index_path = web_dir / "index.html"
+    index_path = WEB_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
 

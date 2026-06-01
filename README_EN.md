@@ -64,6 +64,8 @@ docker run -d \
   ghcr.io/lyc1466/tg-autosign:latest
 ```
 
+Tagged releases also publish a `vX.Y.Z` image tag. To pin a specific version, replace `latest` with a release tag such as `v0.8.5`.
+
 If you use a reverse proxy, bind locally only:
 
 ```bash
