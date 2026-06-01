@@ -42,7 +42,28 @@ type AccountScheduleRow = {
     range_end: string;
 };
 
+type ActionTypeOption = "1" | "2" | "3" | "ai_vision" | "ai_logic";
+
+const DICE_OPTIONS = [
+    "\uD83C\uDFB2",
+    "\uD83C\uDFAF",
+    "\uD83C\uDFC0",
+    "\u26BD",
+    "\uD83C\uDFB3",
+    "\uD83C\uDFB0",
+] as const;
+
 const padTimePart = (value: number) => value.toString().padStart(2, "0");
+
+const toActionTypeOption = (action: any): ActionTypeOption => {
+    const actionId = Number(action?.action);
+    if (actionId === 1) return "1";
+    if (actionId === 3) return "3";
+    if (actionId === 2) return "2";
+    if (actionId === 4 || actionId === 6) return "ai_vision";
+    if (actionId === 5 || actionId === 7) return "ai_logic";
+    return "1";
+};
 
 const addMinutesToClock = (value: string, minutesToAdd: number) => {
     const [rawHour, rawMinute] = value.split(":");
@@ -175,6 +196,46 @@ export default function CreateSignTaskPage() {
         }
     }, [addToast, loadChats, formatErrorMessage]);
 
+    const isActionValid = useCallback((action: any) => {
+        const actionId = Number(action?.action);
+        if (actionId === 1 || actionId === 3) {
+            return Boolean((action?.text || "").trim());
+        }
+        if (actionId === 2) {
+            return Boolean((action?.dice || "").trim());
+        }
+        return [4, 5, 6, 7].includes(actionId);
+    }, []);
+
+    const updateEditingChatAction = useCallback((index: number, updater: (action: any) => any) => {
+        setEditingChat((prev) => {
+            if (!prev || index < 0 || index >= prev.actions.length) return prev;
+            const nextActions = [...prev.actions];
+            nextActions[index] = updater(nextActions[index] || { action: 1, text: "" });
+            return { ...prev, actions: nextActions };
+        });
+    }, []);
+
+    const handleAddEditingAction = useCallback(() => {
+        setEditingChat((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                actions: [...prev.actions, { action: 1, text: "" }],
+            };
+        });
+    }, []);
+
+    const handleRemoveEditingAction = useCallback((index: number) => {
+        setEditingChat((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                actions: prev.actions.filter((_, idx) => idx !== index),
+            };
+        });
+    }, []);
+
     useEffect(() => {
         const tokenStr = getToken();
         if (!tokenStr) {
@@ -245,7 +306,7 @@ export default function CreateSignTaskPage() {
             chat_id: 0,
             name: "",
             manual_chat_id: "",
-            actions: [],
+            actions: [{ action: 1, text: "" }],
             action_interval: 1000,
         });
     };
@@ -286,17 +347,21 @@ export default function CreateSignTaskPage() {
             addToast(t("select_chat_error"), "error");
             return;
         }
-        if (editingChat.actions.length === 0) {
+        if (editingChat.actions.length === 0 || editingChat.actions.some((action) => !isActionValid(action))) {
             addToast(t("add_action_error"), "error");
             return;
         }
         const { manual_chat_id: _manualChatId, ...chatConfig } = editingChat;
+        const actionInterval = Number(chatConfig.action_interval);
+        const deleteAfter = chatConfig.delete_after;
         setChats([
             ...chats,
             {
                 ...chatConfig,
                 chat_id: resolvedChatId,
                 name: chatConfig.name || `chat_${resolvedChatId}`,
+                delete_after: deleteAfter === undefined ? undefined : Number(deleteAfter),
+                action_interval: Number.isFinite(actionInterval) && actionInterval > 0 ? actionInterval : 1000,
             },
         ]);
         setEditingChat(null);
@@ -686,6 +751,10 @@ export default function CreateSignTaskPage() {
                                                     <div className="text-[10px] text-main/30 font-mono mt-0.5">
                                                         {t("id_label")}: {chat.chat_id} | <span className="text-[#8a3ffc]/60 font-bold">{chat.actions.length} {t("actions_count")}</span>
                                                     </div>
+                                                    <div className="text-[10px] text-main/30 font-mono mt-0.5">
+                                                        {t("action_interval")}: {chat.action_interval || 1000}ms
+                                                        {chat.delete_after ? ` | ${t("task_flow_delete_after")}: ${chat.delete_after}s` : ""}
+                                                    </div>
                                                 </div>
                                             </div>
                                             <button
@@ -714,7 +783,7 @@ export default function CreateSignTaskPage() {
             {
                 editingChat && (
                     <div className="modal-overlay active fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="glass-panel modal-content w-full max-w-lg animate-scale-in flex flex-col overflow-hidden">
+                        <div className="glass-panel modal-content w-full max-w-3xl max-h-[calc(100vh-2rem)] animate-scale-in flex flex-col overflow-hidden">
                             <header className="p-6 border-b border-white/5 flex justify-between items-center bg-black/5">
                                 <h2 className="text-xl font-bold flex items-center gap-3">
                                     <div className="p-2 bg-[#8a3ffc]/10 rounded-lg text-[#b57dff]">
@@ -727,7 +796,7 @@ export default function CreateSignTaskPage() {
                                 </button>
                             </header>
 
-                            <div className="p-6 space-y-6">
+                            <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                                 <div className="space-y-2">
                                     <label className="text-xs uppercase tracking-widest font-bold text-main/40">{t("select_target_chat")}</label>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -804,7 +873,7 @@ export default function CreateSignTaskPage() {
                                                 {availableChats.map(c => <option key={c.id} value={c.id}>{c.title || c.username || c.id}</option>)}
                                             </select>
                                         </div>
-                                        <div className="space-y-2 md:col-span-2">
+                                        <div className="space-y-2">
                                             <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("manual_chat_id")}</label>
                                             <input
                                                 className="!mb-0"
@@ -820,6 +889,40 @@ export default function CreateSignTaskPage() {
                                                 }}
                                             />
                                         </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("delete_after")}</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                className="!mb-0"
+                                                placeholder={t("delete_after_placeholder")}
+                                                value={editingChat.delete_after ?? ""}
+                                                onChange={(e) => {
+                                                    const cleaned = e.target.value.replace(/[^0-9]/g, "");
+                                                    const val = cleaned === "" ? undefined : Number(cleaned);
+                                                    setEditingChat({
+                                                        ...editingChat,
+                                                        delete_after: val,
+                                                    });
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="space-y-2 md:col-span-2">
+                                            <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("action_interval")}</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                className="!mb-0"
+                                                value={editingChat.action_interval}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10) || 1000;
+                                                    setEditingChat({
+                                                        ...editingChat,
+                                                        action_interval: val,
+                                                    });
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -827,36 +930,132 @@ export default function CreateSignTaskPage() {
                                     <div className="flex items-center justify-between">
                                         <label className="text-xs uppercase tracking-widest font-bold text-main/40">{t("action_sequence_title")}</label>
                                         <button
-                                            onClick={() => setEditingChat({ ...editingChat, actions: [...editingChat.actions, { action: 1, text: "" }] })}
-                                            className="text-[10px] font-bold text-[#8a3ffc] hover:underline"
+                                            type="button"
+                                            onClick={handleAddEditingAction}
+                                            className="btn-secondary !h-7 !px-3 !text-[10px]"
                                         >
                                             + {t("add_sign_action")}
                                         </button>
                                     </div>
 
-                                    <div className="max-h-[200px] overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                                    <div className="max-h-[260px] overflow-y-auto space-y-3 custom-scrollbar pr-2">
                                         {editingChat.actions.map((act, i) => (
-                                            <div key={i} className="flex gap-3 items-center animate-scale-in">
-                                                <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-bold text-main/30">
+                                            <div key={i} className="flex flex-col md:flex-row gap-3 md:items-center animate-scale-in rounded-xl border border-white/5 bg-black/5 p-3">
+                                                <div className="shrink-0 w-6 h-10 flex items-center justify-center font-mono text-[10px] text-main/20 font-bold border-r border-white/5">
                                                     {i + 1}
                                                 </div>
-                                                <input
-                                                    className="!h-9 !text-sm"
-                                                    value={act.text}
+                                                <select
+                                                    className="!w-full md:!w-[170px] !h-10 !mb-0"
+                                                    value={toActionTypeOption(act)}
                                                     onChange={(e) => {
-                                                        const newActs = [...editingChat.actions];
-                                                        newActs[i] = { ...newActs[i], text: e.target.value };
-                                                        setEditingChat({ ...editingChat, actions: newActs });
+                                                        const selectedType = e.target.value as ActionTypeOption;
+                                                        updateEditingChatAction(i, (currentAction) => {
+                                                            const currentActionId = Number(currentAction?.action);
+                                                            if (selectedType === "1") {
+                                                                return { ...currentAction, action: 1, text: currentAction?.text || "" };
+                                                            }
+                                                            if (selectedType === "3") {
+                                                                return { ...currentAction, action: 3, text: currentAction?.text || "" };
+                                                            }
+                                                            if (selectedType === "2") {
+                                                                return { ...currentAction, action: 2, dice: currentAction?.dice || DICE_OPTIONS[0] };
+                                                            }
+                                                            if (selectedType === "ai_vision") {
+                                                                const nextActionId = (currentActionId === 4 || currentActionId === 6) ? currentActionId : 6;
+                                                                return { ...currentAction, action: nextActionId };
+                                                            }
+                                                            const nextActionId = (currentActionId === 5 || currentActionId === 7) ? currentActionId : 5;
+                                                            return { ...currentAction, action: nextActionId };
+                                                        });
                                                     }}
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const newActs = editingChat.actions.filter((_, idx) => idx !== i);
-                                                        setEditingChat({ ...editingChat, actions: newActs });
-                                                    }}
-                                                    className="action-btn !w-9 !h-9 status-action-danger"
                                                 >
-                                                    <X weight="bold" />
+                                                    <option value="1">{t("action_send_text")}</option>
+                                                    <option value="3">{t("action_click_button")}</option>
+                                                    <option value="2">{t("action_send_dice")}</option>
+                                                    <option value="ai_vision">{t("action_ai_vision")}</option>
+                                                    <option value="ai_logic">{t("action_ai_logic")}</option>
+                                                </select>
+                                                <div className="flex-1 min-w-0">
+                                                    {(Number(act.action) === 1 || Number(act.action) === 3) && (
+                                                        <input
+                                                            className="!mb-0 !h-10 !text-sm"
+                                                            placeholder={Number(act.action) === 1 ? t("placeholder_msg") : t("placeholder_btn")}
+                                                            value={act.text || ""}
+                                                            onChange={(e) => {
+                                                                updateEditingChatAction(i, (currentAction) => ({
+                                                                    ...currentAction,
+                                                                    text: e.target.value,
+                                                                }));
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {Number(act.action) === 2 && (
+                                                        <div className="flex items-center gap-2 overflow-x-auto">
+                                                            <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-main/40">
+                                                                <DiceFive weight="bold" size={18} />
+                                                            </div>
+                                                            {DICE_OPTIONS.map((dice) => (
+                                                                <button
+                                                                    key={dice}
+                                                                    type="button"
+                                                                    className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-lg transition-all ${act.dice === dice ? "bg-[#8a3ffc]/20 border border-[#8a3ffc]/40" : "bg-white/5 border border-white/5 hover:bg-white/10"}`}
+                                                                    onClick={() => {
+                                                                        updateEditingChatAction(i, (currentAction) => ({
+                                                                            ...currentAction,
+                                                                            dice,
+                                                                        }));
+                                                                    }}
+                                                                >
+                                                                    {dice}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {(Number(act.action) === 4 || Number(act.action) === 6) && (
+                                                        <div className="h-10 px-3 flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                                                            <Robot weight="fill" size={16} className="text-[#8183ff] shrink-0" />
+                                                            <select
+                                                                className="!mb-0 !h-10 !py-0 !text-xs !w-full"
+                                                                value={Number(act.action) === 4 ? "click" : "send"}
+                                                                onChange={(e) => {
+                                                                    const nextActionId = e.target.value === "click" ? 4 : 6;
+                                                                    updateEditingChatAction(i, (currentAction) => ({
+                                                                        ...currentAction,
+                                                                        action: nextActionId,
+                                                                    }));
+                                                                }}
+                                                            >
+                                                                <option value="send">{t("action_ai_vision_send")}</option>
+                                                                <option value="click">{t("action_ai_vision_click")}</option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                    {(Number(act.action) === 5 || Number(act.action) === 7) && (
+                                                        <div className="h-10 px-3 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                                            <MathOperations weight="fill" size={16} className="text-amber-400 shrink-0" />
+                                                            <select
+                                                                className="!mb-0 !h-10 !py-0 !text-xs !w-full"
+                                                                value={Number(act.action) === 7 ? "click" : "send"}
+                                                                onChange={(e) => {
+                                                                    const nextActionId = e.target.value === "click" ? 7 : 5;
+                                                                    updateEditingChatAction(i, (currentAction) => ({
+                                                                        ...currentAction,
+                                                                        action: nextActionId,
+                                                                    }));
+                                                                }}
+                                                            >
+                                                                <option value="send">{t("action_ai_logic_send")}</option>
+                                                                <option value="click">{t("action_ai_logic_click")}</option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveEditingAction(i)}
+                                                    className="action-btn shrink-0 !w-10 !h-10 status-action-danger"
+                                                >
+                                                    <Trash weight="bold" size={16} />
                                                 </button>
                                             </div>
                                         ))}
