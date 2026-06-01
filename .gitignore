@@ -154,3 +154,7 @@ frontend/tmp-e2e/
 frontend/tmp-playwright-ui/
 frontend/tsconfig.tsbuildinfo
 frontend/.env.local
+outputs/runtime
+docs/requirements
+docs/plans
+.vibeskills

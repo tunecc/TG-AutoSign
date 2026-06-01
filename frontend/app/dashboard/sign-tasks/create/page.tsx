@@ -126,8 +126,8 @@ export default function CreateSignTaskPage() {
 
     const handleCancel = useCallback(() => {
         resetForm();
-        router.replace("/dashboard");
-    }, [resetForm, router]);
+        window.location.href = "/dashboard";
+    }, [resetForm]);
 
     // 当前编辑的 Chat
     const [editingChat, setEditingChat] = useState<{
@@ -713,7 +713,7 @@ export default function CreateSignTaskPage() {
             {/* Editing Dialog */}
             {
                 editingChat && (
-                    <div className="modal-overlay fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="modal-overlay active fixed inset-0 z-[100] flex items-center justify-center p-4">
                         <div className="glass-panel modal-content w-full max-w-lg animate-scale-in flex flex-col overflow-hidden">
                             <header className="p-6 border-b border-white/5 flex justify-between items-center bg-black/5">
                                 <h2 className="text-xl font-bold flex items-center gap-3">
