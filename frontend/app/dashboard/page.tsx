@@ -1128,6 +1128,15 @@ export default function Dashboard() {
           <div className="dashboard-toolbar-actions">
             <button
               className="btn-secondary dashboard-tool-btn"
+              onClick={() => router.push("/dashboard/sign-tasks/create")}
+              disabled={loading}
+              title={t("task_center_entry_hint")}
+            >
+              <Plus weight="bold" size={16} />
+              <span>{t("task_center")}</span>
+            </button>
+            <button
+              className="btn-secondary dashboard-tool-btn"
               onClick={openImportDialog}
               disabled={loading || importingPackage}
               title={t("account_package_import")}

@@ -5,6 +5,7 @@ This file records important feature, fix, configuration, deployment, and documen
 
 ## 2026-06-01
 
+- 修复 / Fixed: Dashboard 首页增加“任务中心”入口，任务中心返回按钮改为返回首页；目标聊天选择按聊天列表来源账号加载，支持刷新会话列表、搜索会话与手动输入 Chat ID / Add a Task Center entry on the dashboard, make the Task Center back button return home, and load target chats from the selected chat-list source account with refresh, search, and manual Chat ID fallback.
 - 新增 / Added: 签到任务创建页支持以任务中心方式批量选择账号，并为每个账号设置固定时间或时间段；支持按账号顺序自动错开触发时间，便于同一任务模板分发到多个账号 / Add a task-center-style sign task creation flow that applies one task template to multiple selected accounts with per-account fixed-time or time-range schedules, including staggered scheduling.
 - 变更 / Changed: 账号任务页移除独立批量导入入口，将多任务 JSON 识别合并到“粘贴导入任务”中，并为导入导出按钮增加文字标签，提升入口可识别性 / Merge batch JSON import into the paste-import flow on the account task page and add clearer text labels to import/export actions.
 - 修复 / Fixed: 后端本地源码运行时支持通过 `WEB_DIR` 指定前端静态目录，并在 `/web` 不存在时回退到本地 `frontend/out`；同时固定 `bcrypt==4.0.1`，避免新版 bcrypt 与 passlib 的兼容问题影响启动 / Allow local backend source runs to use `WEB_DIR` or fall back from `/web` to local `frontend/out`, and pin `bcrypt==4.0.1` to avoid the passlib compatibility issue.

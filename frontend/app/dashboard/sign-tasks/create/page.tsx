@@ -24,7 +24,8 @@ import {
     Robot,
     MathOperations,
     Lightning,
-    Check
+    Check,
+    ArrowClockwise
 } from "@phosphor-icons/react";
 import { ThemeLanguageToggle } from "../../../../components/ThemeLanguageToggle";
 import { useLanguage } from "../../../../context/LanguageContext";
@@ -79,7 +80,6 @@ export default function CreateSignTaskPage() {
     const [rangeStart, setRangeStart] = useState("09:00");
     const [rangeEnd, setRangeEnd] = useState("18:00");
     const [randomSeconds, setRandomSeconds] = useState(0);
-    const [chatId, setChatId] = useState(0);
     const [signInterval, setSignInterval] = useState(1);
     const [chats, setChats] = useState<SignTaskChat[]>([]);
 
@@ -89,6 +89,8 @@ export default function CreateSignTaskPage() {
     const [accountSchedules, setAccountSchedules] = useState<AccountScheduleRow[]>([]);
     const [staggerMinutes, setStaggerMinutes] = useState(5);
     const [availableChats, setAvailableChats] = useState<ChatInfo[]>([]);
+    const [loadingChats, setLoadingChats] = useState(false);
+    const [refreshingChats, setRefreshingChats] = useState(false);
     const [chatSearch, setChatSearch] = useState("");
     const [chatSearchResults, setChatSearchResults] = useState<ChatInfo[]>([]);
     const [chatSearchLoading, setChatSearchLoading] = useState(false);
@@ -114,7 +116,6 @@ export default function CreateSignTaskPage() {
         setRangeStart("09:00");
         setRangeEnd("18:00");
         setRandomSeconds(0);
-        setChatId(0);
         setSignInterval(1);
         setChats([]);
         setEditingChat(null);
@@ -125,27 +126,33 @@ export default function CreateSignTaskPage() {
 
     const handleCancel = useCallback(() => {
         resetForm();
-        router.replace("/dashboard/sign-tasks");
+        router.replace("/dashboard");
     }, [resetForm, router]);
 
     // 当前编辑的 Chat
     const [editingChat, setEditingChat] = useState<{
         chat_id: number;
         name: string;
+        manual_chat_id: string;
         actions: any[];
         delete_after?: number;
         action_interval: number;
     } | null>(null);
 
-    const loadChats = useCallback(async (tokenStr: string, accountName: string) => {
+    const loadChats = useCallback(async (tokenStr: string, accountName: string, forceRefresh = false) => {
         try {
-            const chatsData = await getAccountChats(tokenStr, accountName);
+            setLoadingChats(true);
+            const chatsData = await getAccountChats(tokenStr, accountName, forceRefresh);
             setAvailableChats(chatsData);
+            return chatsData;
         } catch (err: any) {
             if (handleAccountSessionInvalid(err)) return;
-            console.error("加载 Chat 失败:", err);
+            addToast(formatErrorMessage(forceRefresh ? "refresh_failed" : "load_failed", err), "error");
+            return [];
+        } finally {
+            setLoadingChats(false);
         }
-    }, [handleAccountSessionInvalid]);
+    }, [addToast, formatErrorMessage, handleAccountSessionInvalid]);
 
     const loadAccounts = useCallback(async (tokenStr: string) => {
         try {
@@ -182,6 +189,10 @@ export default function CreateSignTaskPage() {
 
     const handleAccountChange = (accountName: string) => {
         setSelectedAccount(accountName);
+        setAvailableChats([]);
+        setChatSearch("");
+        setChatSearchResults([]);
+        setChatSearchLoading(false);
         if (token) {
             loadChats(token, accountName);
         }
@@ -233,14 +244,45 @@ export default function CreateSignTaskPage() {
         setEditingChat({
             chat_id: 0,
             name: "",
+            manual_chat_id: "",
             actions: [],
             action_interval: 1000,
         });
     };
 
+    const applyChatSelection = (chatId: number, chatName: string) => {
+        if (!editingChat) return;
+        setEditingChat({
+            ...editingChat,
+            chat_id: chatId,
+            manual_chat_id: chatId !== 0 ? String(chatId) : "",
+            name: chatName,
+        });
+    };
+
+    const handleRefreshChats = async () => {
+        if (!token || !selectedAccount) return;
+        try {
+            setRefreshingChats(true);
+            await loadChats(token, selectedAccount, true);
+            addToast(t("chats_refreshed"), "success");
+        } finally {
+            setRefreshingChats(false);
+        }
+    };
+
     const handleSaveChat = () => {
         if (!editingChat) return;
-        if (editingChat.chat_id === 0) {
+        let resolvedChatId = editingChat.chat_id;
+        const manualChatId = editingChat.manual_chat_id.trim();
+        if (manualChatId) {
+            resolvedChatId = Number(manualChatId);
+            if (!Number.isFinite(resolvedChatId)) {
+                addToast(t("chat_id_numeric"), "error");
+                return;
+            }
+        }
+        if (resolvedChatId === 0) {
             addToast(t("select_chat_error"), "error");
             return;
         }
@@ -248,7 +290,15 @@ export default function CreateSignTaskPage() {
             addToast(t("add_action_error"), "error");
             return;
         }
-        setChats([...chats, editingChat]);
+        const { manual_chat_id: _manualChatId, ...chatConfig } = editingChat;
+        setChats([
+            ...chats,
+            {
+                ...chatConfig,
+                chat_id: resolvedChatId,
+                name: chatConfig.name || `chat_${resolvedChatId}`,
+            },
+        ]);
         setEditingChat(null);
     };
 
@@ -680,60 +730,97 @@ export default function CreateSignTaskPage() {
                             <div className="p-6 space-y-6">
                                 <div className="space-y-2">
                                     <label className="text-xs uppercase tracking-widest font-bold text-main/40">{t("select_target_chat")}</label>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("search_chat")}</label>
-                                        <input
-                                            className="!mb-0"
-                                            placeholder={t("search_chat_placeholder")}
-                                            value={chatSearch}
-                                            onChange={(e) => setChatSearch(e.target.value)}
-                                        />
-                                    </div>
-                                    {chatSearch.trim() ? (
-                                        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-white/5 bg-black/5">
-                                            {chatSearchLoading ? (
-                                                <div className="px-3 py-2 text-xs text-main/40">{t("searching")}</div>
-                                            ) : chatSearchResults.length > 0 ? (
-                                                <div className="flex flex-col">
-                                                    {chatSearchResults.map((chat) => {
-                                                        const title = chat.title || chat.username || String(chat.id);
-                                                        return (
-                                                            <button
-                                                                key={chat.id}
-                                                                type="button"
-                                                                className="text-left px-3 py-2 hover:bg-white/5 border-b border-white/5 last:border-b-0"
-                                                                onClick={() => {
-                                                                    setEditingChat({ ...editingChat, chat_id: chat.id, name: title });
-                                                                    setChatSearch("");
-                                                                    setChatSearchResults([]);
-                                                                }}
-                                                            >
-                                                                <div className="text-sm font-semibold truncate">{title}</div>
-                                                                <div className="text-[10px] text-main/40 font-mono truncate">
-                                                                    {chat.id}{chat.username ? ` · @${chat.username}` : ""}
-                                                                </div>
-                                                            </button>
-                                                        );
-                                                    })}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("search_chat")}</label>
+                                            <input
+                                                className="!mb-0"
+                                                placeholder={t("search_chat_placeholder")}
+                                                value={chatSearch}
+                                                onChange={(e) => setChatSearch(e.target.value)}
+                                            />
+                                            {chatSearch.trim() ? (
+                                                <div className="max-h-48 overflow-y-auto rounded-lg border border-white/5 bg-black/5">
+                                                    {chatSearchLoading ? (
+                                                        <div className="px-3 py-2 text-xs text-main/40">{t("searching")}</div>
+                                                    ) : chatSearchResults.length > 0 ? (
+                                                        <div className="flex flex-col">
+                                                            {chatSearchResults.map((chat) => {
+                                                                const title = chat.title || chat.username || String(chat.id);
+                                                                return (
+                                                                    <button
+                                                                        key={chat.id}
+                                                                        type="button"
+                                                                        className="text-left px-3 py-2 hover:bg-white/5 border-b border-white/5 last:border-b-0"
+                                                                        onClick={() => {
+                                                                            applyChatSelection(chat.id, title);
+                                                                            setChatSearch("");
+                                                                            setChatSearchResults([]);
+                                                                        }}
+                                                                    >
+                                                                        <div className="text-sm font-semibold truncate">{title}</div>
+                                                                        <div className="text-[10px] text-main/40 font-mono truncate">
+                                                                            {chat.id}{chat.username ? ` · @${chat.username}` : ""}
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="px-3 py-2 text-xs text-main/40">{t("search_no_results")}</div>
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <div className="px-3 py-2 text-xs text-main/40">{t("search_no_results")}</div>
-                                            )}
+                                            ) : null}
                                         </div>
-                                    ) : (
-                                        <select
-                                            className="mt-2"
-                                            value={editingChat.chat_id}
-                                            onChange={(e) => {
-                                                const cid = parseInt(e.target.value);
-                                                const chat = availableChats.find(c => c.id === cid);
-                                                setEditingChat({ ...editingChat, chat_id: cid, name: chat?.title || chat?.username || "" });
-                                            }}
-                                        >
-                                            <option value={0}>{t("select_chat_placeholder")}</option>
-                                            {availableChats.map(c => <option key={c.id} value={c.id}>{c.title || c.username}</option>)}
-                                        </select>
-                                    )}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("select_from_list")}</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleRefreshChats}
+                                                    disabled={refreshingChats || loadingChats}
+                                                    className="text-[10px] text-[#8a3ffc] hover:text-[#8a3ffc]/80 transition-colors uppercase font-bold tracking-tighter flex items-center gap-1"
+                                                    title={t("refresh_chat_title")}
+                                                >
+                                                    {(refreshingChats || loadingChats) ? (
+                                                        <Spinner className="animate-spin" size={12} />
+                                                    ) : <ArrowClockwise weight="bold" size={12} />}
+                                                    {t("refresh_list")}
+                                                </button>
+                                            </div>
+                                            <select
+                                                className="!mb-0"
+                                                value={editingChat.chat_id}
+                                                disabled={loadingChats}
+                                                onChange={(e) => {
+                                                    const cid = parseInt(e.target.value);
+                                                    const chat = availableChats.find(c => c.id === cid);
+                                                    applyChatSelection(cid, chat?.title || chat?.username || "");
+                                                }}
+                                            >
+                                                <option value={0}>
+                                                    {loadingChats ? t("loading") : t("select_chat_placeholder")}
+                                                </option>
+                                                {availableChats.map(c => <option key={c.id} value={c.id}>{c.title || c.username || c.id}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2 md:col-span-2">
+                                            <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("manual_chat_id")}</label>
+                                            <input
+                                                className="!mb-0"
+                                                placeholder={t("manual_id_placeholder")}
+                                                value={editingChat.manual_chat_id}
+                                                onChange={(e) => {
+                                                    setEditingChat({
+                                                        ...editingChat,
+                                                        chat_id: 0,
+                                                        manual_chat_id: e.target.value,
+                                                        name: e.target.value.trim() ? `chat_${e.target.value.trim()}` : editingChat.name,
+                                                    });
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">
