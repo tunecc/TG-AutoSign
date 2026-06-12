@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.core import auth as auth_core
 from backend.core.auth import authenticate_user, create_access_token, verify_totp
+from backend.core.config import get_settings
 from backend.core.database import get_db
 from backend.core.security import verify_password
 from backend.models.user import User
@@ -16,6 +17,7 @@ from backend.schemas.auth import LoginRequest, TokenResponse, UserOut
 
 router = APIRouter()
 logger = logging.getLogger("backend.auth")
+settings = get_settings()
 
 
 class ResetTOTPRequest(BaseModel):
@@ -56,9 +58,14 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="TOTP_REQUIRED_OR_INVALID",
             )
+    expires_delta = (
+        timedelta(days=settings.remember_me_expire_days)
+        if payload.remember_me
+        else timedelta(hours=settings.access_token_expire_hours)
+    )
     access_token = create_access_token(
         data={"sub": user.username},
-        expires_delta=timedelta(hours=12),
+        expires_delta=expires_delta,
     )
     return TokenResponse(access_token=access_token)
 

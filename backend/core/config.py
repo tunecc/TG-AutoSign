@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     secret_key: str = _runtime.secret_key
     access_token_expire_hours: int = _runtime.access_token_expire_hours
+    remember_me_expire_days: int = _runtime.remember_me_expire_days
 
     timezone: str = _runtime.timezone
     data_dir: Path = get_initial_data_dir()

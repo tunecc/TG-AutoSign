@@ -17,18 +17,26 @@ export default function LoginForm() {
   const router = useRouter();
   const { t } = useLanguage();
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [totp, setTotp] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const submittedUsername = String(formData.get("username") || "");
+    const submittedPassword = String(formData.get("password") || "");
+    const submittedTotp = String(formData.get("totp_code") || "").trim();
+
     setLoading(true);
     setErrorMsg("");
     try {
-      const res = await login({ username, password, totp_code: totp || undefined });
+      const res = await login({
+        username: submittedUsername,
+        password: submittedPassword,
+        totp_code: submittedTotp || undefined,
+        remember_me: rememberMe,
+      });
       setToken(res.access_token);
       router.push("/dashboard");
     } catch (err: any) {
@@ -67,43 +75,58 @@ export default function LoginForm() {
           <p className="text-[#9496a1] text-[11px] mt-1 leading-relaxed px-4 font-medium">{t("settings_desc")}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="text-left" autoComplete="off">
+        <form onSubmit={handleSubmit} className="text-left" autoComplete="on">
           <div className="mb-4">
-            <label className="text-[11px] mb-1.5 block font-bold text-main/60 uppercase tracking-widest">{t("username")}</label>
+            <label htmlFor="username" className="text-[11px] mb-1.5 block font-bold text-main/60 uppercase tracking-widest">{t("username")}</label>
             <input
+              id="username"
               type="text"
               name="username"
               className="!py-3 !px-4 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
               placeholder={t("username")}
-              autoComplete="off"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
             />
           </div>
           <div className="mb-4">
-            <label className="text-[11px] mb-1.5 block font-bold text-main/60 uppercase tracking-widest">{t("password")}</label>
+            <label htmlFor="password" className="text-[11px] mb-1.5 block font-bold text-main/60 uppercase tracking-widest">{t("password")}</label>
             <input
+              id="password"
               type="password"
               name="password"
               className="!py-3 !px-4 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
               placeholder={t("password")}
-              autoComplete="new-password"
+              autoComplete="current-password"
+              required
             />
           </div>
-          <div className="mb-5">
-            <label className="text-[11px] mb-1.5 block font-bold text-main/60 uppercase tracking-widest">{t("totp")}</label>
+          <div className="mb-4">
+            <label htmlFor="totp-code" className="text-[11px] mb-1.5 block font-bold text-main/60 uppercase tracking-widest">{t("totp")}</label>
             <input
+              id="totp-code"
               type="text"
-              name="totp"
+              name="totp_code"
               className="!py-3 !px-4 text-center tracking-[4px] bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl font-bold"
-              value={totp}
-              onChange={(e) => setTotp(e.target.value)}
               placeholder={t("totp_placeholder")}
-              autoComplete="off"
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              pattern="[0-9 ]*"
             />
           </div>
+
+          <label htmlFor="remember-me" className="mb-5 flex cursor-pointer items-center gap-2 text-[11px] font-medium text-main/60">
+            <input
+              id="remember-me"
+              type="checkbox"
+              name="remember_me"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 accent-yellow-400"
+            />
+            <span>{t("remember_me")}</span>
+          </label>
 
           {errorMsg && (
             <div className="text-[#ff4757] text-[11px] mb-5 text-center bg-[#ff4757]/10 p-2.5 rounded-xl font-medium border border-[#ff4757]/20">

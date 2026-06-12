@@ -93,6 +93,7 @@ export const login = (payload: {
   username: string;
   password: string;
   totp_code?: string;
+  remember_me?: boolean;
 }) =>
   request<TokenResponse>("/auth/login", {
     method: "POST",

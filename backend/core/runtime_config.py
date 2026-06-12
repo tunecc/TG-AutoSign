@@ -77,6 +77,7 @@ class AppRuntimeConfig:
     host: str
     secret_key: str
     access_token_expire_hours: int
+    remember_me_expire_days: int
     timezone: str
 
 
@@ -177,6 +178,9 @@ def get_app_runtime_config() -> AppRuntimeConfig:
         secret_key=_read_str_env("APP_SECRET_KEY") or _DEFAULT_SECRET_KEY,
         access_token_expire_hours=_read_positive_int_env(
             "APP_ACCESS_TOKEN_EXPIRE_HOURS", 12, 1
+        ),
+        remember_me_expire_days=_read_positive_int_env(
+            "APP_REMEMBER_ME_EXPIRE_DAYS", 30, 1
         ),
         timezone=_read_str_env("TZ") or "Asia/Hong_Kong",
     )

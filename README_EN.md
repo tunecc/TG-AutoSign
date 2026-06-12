@@ -227,6 +227,7 @@ The table below follows `.env.example`.
 | `APP_APP_NAME` | `tg-signer-panel` | Panel application name |
 | `APP_SECRET_KEY` | `your_secret_key_here` | Panel secret key; strongly recommended to set |
 | `APP_ACCESS_TOKEN_EXPIRE_HOURS` | `12` | Access token lifetime in hours |
+| `APP_REMEMBER_ME_EXPIRE_DAYS` | `30` | Access token lifetime in days when "Keep me signed in" is enabled |
 | `ADMIN_USERNAME` | `admin` (optional) | Initial admin username; only used when the user table is empty |
 | `ADMIN_PASSWORD` | `change_me` (optional) | Initial admin password; defaults to `admin123` if unset |
 | `APP_TOTP_VALID_WINDOW` | `1` (example) | TOTP tolerance window for 2FA |

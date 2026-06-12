@@ -228,6 +228,7 @@ tools/        辅助工具脚本
 | `APP_APP_NAME` | `tg-signer-panel` | 面板应用名称 |
 | `APP_SECRET_KEY` | `your_secret_key_here` | 面板密钥，强烈建议显式设置 |
 | `APP_ACCESS_TOKEN_EXPIRE_HOURS` | `12` | 登录令牌有效期（小时） |
+| `APP_REMEMBER_ME_EXPIRE_DAYS` | `30` | 勾选“保持登录”后的登录令牌有效期（天） |
 | `ADMIN_USERNAME` | `admin`（可选） | 初始管理员用户名；仅在首次创建用户表为空时生效 |
 | `ADMIN_PASSWORD` | `change_me`（可选） | 初始管理员密码；未设置时默认 `admin123` |
 | `APP_TOTP_VALID_WINDOW` | `1`（示例） | 2FA TOTP 时间窗口容差 |

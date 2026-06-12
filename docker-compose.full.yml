@@ -54,6 +54,9 @@ services:
       # 登录令牌有效期（小时）
       # - APP_ACCESS_TOKEN_EXPIRE_HOURS=12
 
+      # 勾选“保持登录”后的登录令牌有效期（天）
+      # - APP_REMEMBER_ME_EXPIRE_DAYS=30
+
       # 初始管理员账号，仅在首次创建用户表为空时生效；用户名不填时默认 admin
       # - ADMIN_USERNAME=admin
 

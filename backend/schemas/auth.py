@@ -10,6 +10,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
     totp_code: Optional[str] = None
+    remember_me: bool = True
 
 
 class TokenResponse(BaseModel):

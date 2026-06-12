@@ -3,15 +3,23 @@
 本文件记录当前维护分支的重要功能、修复、配置、部署与文档变更。
 This file records important feature, fix, configuration, deployment, and documentation changes for the current maintained branch.
 
+## 2026-06-12
+
+- 修复 / Fixed: 登录页改为标准登录表单语义，用户名、密码与 TOTP 字段分别使用 `username`、`current-password`、`one-time-code` 自动填充标记，并在提交时直接读取表单 DOM 值，提升 Bitwarden 与浏览器密码管理器自动填充兼容性 / Use standard sign-in form semantics for the login page with `username`, `current-password`, and `one-time-code` autocomplete hints, and read submitted DOM form values directly to improve Bitwarden and browser password-manager autofill compatibility.
+- 新增 / Added: 登录页新增默认开启的“保持登录 30 天”选项；登录接口增加 `remember_me` 参数，勾选时签发 30 天令牌，未勾选时继续使用 `APP_ACCESS_TOKEN_EXPIRE_HOURS` 短会话配置，并新增 `APP_REMEMBER_ME_EXPIRE_DAYS` 运行时配置与文档 / Add a default-enabled "keep me signed in for 30 days" option; extend login with `remember_me`, issue 30-day tokens when enabled, keep `APP_ACCESS_TOKEN_EXPIRE_HOURS` for short sessions when disabled, and document the new `APP_REMEMBER_ME_EXPIRE_DAYS` runtime config.
+
 ## 2026-06-01
 
 - 修复 / Fixed: Dashboard 首页增加“任务中心”入口，任务中心返回按钮改为返回首页；目标聊天选择按聊天列表来源账号加载，支持刷新会话列表、搜索会话与手动输入 Chat ID / Add a Task Center entry on the dashboard, make the Task Center back button return home, and load target chats from the selected chat-list source account with refresh, search, and manual Chat ID fallback.
 - 新增 / Added: 签到任务创建页支持以任务中心方式批量选择账号，并为每个账号设置固定时间或时间段；支持按账号顺序自动错开触发时间，便于同一任务模板分发到多个账号 / Add a task-center-style sign task creation flow that applies one task template to multiple selected accounts with per-account fixed-time or time-range schedules, including staggered scheduling.
+- 新增 / Added: 任务中心目标聊天弹窗补齐旧版任务编辑的动作序列配置，支持发送文本、点击按钮、发送骰子、AI 图片识别与 AI 计算题，并支持动作间隔、删除延迟、保存前校验和动作数量回显 / Complete action-sequence configuration in the Task Center target-chat dialog with text send, button click, dice, AI vision, and AI logic actions, plus action interval, delete delay, pre-save validation, and action-count summaries.
 - 变更 / Changed: 账号任务页移除独立批量导入入口，将多任务 JSON 识别合并到“粘贴导入任务”中，并为导入导出按钮增加文字标签，提升入口可识别性 / Merge batch JSON import into the paste-import flow on the account task page and add clearer text labels to import/export actions.
 - 修复 / Fixed: 后端本地源码运行时支持通过 `WEB_DIR` 指定前端静态目录，并在 `/web` 不存在时回退到本地 `frontend/out`；同时固定 `bcrypt==4.0.1`，避免新版 bcrypt 与 passlib 的兼容问题影响启动 / Allow local backend source runs to use `WEB_DIR` or fall back from `/web` to local `frontend/out`, and pin `bcrypt==4.0.1` to avoid the passlib compatibility issue.
+- 修复 / Fixed: 任务中心取消返回改为整页跳转 Dashboard，修复添加聊天弹窗 overlay 激活状态，并稳定 Toast 回调引用，避免弹窗样式和通知生命周期异常 / Make Task Center cancel navigation return to the dashboard via full-page navigation, fix the add-chat modal overlay active state, and stabilize toast callback references to avoid modal styling and toast lifecycle issues.
 
 ## 2026-05-29
 
+- 新增 / Added: 账号管理支持 Telegram-Panel 账号包导入导出，后端可安全解压 Zip 并导入 Telethon 兼容包、session string、SQLite session、Telegram-Panel WTelegram 加密 session 与 Telegram Desktop TData，支持同名跳过或覆盖，并可导出 Telethon 或 TData 格式 / Add Telegram-Panel account-package import/export in account management, with safe Zip extraction and support for Telethon-compatible packages, session strings, SQLite sessions, Telegram-Panel encrypted WTelegram sessions, and Telegram Desktop TData, with duplicate skip/overwrite and Telethon or TData export formats.
 - 新增 / Added: 代理配置支持 HTTP/HTTPS 等协议格式；前端代理输入增加实时格式校验，覆盖手机号登录、二维码登录与账号编辑三个入口，非法端口或格式会立即提示；同步更新 CLI help、环境变量注释与 UI 文案 / Add HTTP/HTTPS proxy format support; add client-side proxy format validation in phone login, QR login, and account-edit forms with immediate error feedback; update CLI help, env example comments, and UI labels.
 
 ## 2026-05-07
