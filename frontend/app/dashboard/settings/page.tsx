@@ -30,6 +30,10 @@ import {
     saveTelegramNotificationConfig,
     deleteTelegramNotificationConfig,
     testTelegramNotificationConfig,
+    importAccountPackage,
+    exportAccountPackage,
+    AccountPackageImportItem,
+    AccountPackageFormat,
 } from "../../../lib/api";
 import type { TelegramNotificationConfig } from "../../../lib/types";
 import {
@@ -48,7 +52,9 @@ import {
     Trash,
     Robot as BotIcon,
     Terminal,
-    GithubLogo
+    GithubLogo,
+    UploadSimple,
+    Package,
 } from "@phosphor-icons/react";
 import {
     BRAND_EXPORT_FILENAME,
@@ -60,7 +66,7 @@ import { useLanguage } from "../../../context/LanguageContext";
 
 export default function SettingsPage() {
     const router = useRouter();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const { toasts, addToast, removeToast } = useToast();
     const [token, setLocalToken] = useState<string | null>(null);
     const [userLoading, setUserLoading] = useState(false);
@@ -91,6 +97,13 @@ export default function SettingsPage() {
     // 配置导入导出
     const [importConfig, setImportConfig] = useState("");
     const [overwriteConfig, setOverwriteConfig] = useState(false);
+
+    // 账号包导入导出
+    const [importPackageFile, setImportPackageFile] = useState<File | null>(null);
+    const [importOverwrite, setImportOverwrite] = useState(false);
+    const [importingPackage, setImportingPackage] = useState(false);
+    const [exportingPackage, setExportingPackage] = useState<AccountPackageFormat | null>(null);
+    const [importResults, setImportResults] = useState<AccountPackageImportItem[]>([]);
 
     // AI 配置
     const [aiConfig, setAIConfigState] = useState<AIConfig | null>(null);
@@ -329,6 +342,54 @@ export default function SettingsPage() {
             addToast(formatErrorMessage("import_failed", err), "error");
         } finally {
             setConfigLoading(false);
+        }
+    };
+
+    const handleImportPackage = async () => {
+        if (!token || !importPackageFile) return;
+        try {
+            setImportingPackage(true);
+            const result = await importAccountPackage(token, importPackageFile, importOverwrite);
+            setImportResults(result.items);
+            const successCount = result.items.filter((item) => item.status === "success").length;
+            const failureCount = result.items.filter((item) => item.status === "failed").length;
+            if (failureCount === 0) {
+                addToast(
+                    `${t("account_package_import_success")}: ${successCount}`,
+                    "success"
+                );
+            } else {
+                addToast(
+                    `${t("account_package_import_partial")}: ${successCount} ${t("success")}, ${failureCount} ${t("failed")}`,
+                    "info"
+                );
+            }
+            setImportPackageFile(null);
+        } catch (err: any) {
+            addToast(formatErrorMessage("account_package_import_failed", err), "error");
+        } finally {
+            setImportingPackage(false);
+        }
+    };
+
+    const handleExportPackage = async (format: AccountPackageFormat) => {
+        if (!token) return;
+        try {
+            setExportingPackage(format);
+            const blob = await exportAccountPackage(token, format);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `accounts_${format}_${new Date().toISOString().split("T")[0]}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            addToast(`${t("account_package_export_success")}: ${format}`, "success");
+        } catch (err: any) {
+            addToast(formatErrorMessage("account_package_export_failed", err), "error");
+        } finally {
+            setExportingPackage(null);
         }
     };
 
@@ -1006,6 +1067,93 @@ export default function SettingsPage() {
                                 <button onClick={handleImport} className="btn-gradient w-full h-10 !text-xs" disabled={configLoading}>
                                     {configLoading ? <Spinner className="animate-spin" /> : t("execute_import")}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 账号包管理 */}
+                    <div className="glass-panel p-4">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 bg-purple-500/10 rounded-xl text-purple-400">
+                                <Package weight="bold" size={18} />
+                            </div>
+                            <h2 className="text-lg font-bold">{language === "zh" ? "账号包管理" : "Account Package"}</h2>
+                        </div>
+
+                        <div className="flex flex-col gap-6">
+                            {/* 导入账号包 */}
+                            <div className="flex-1">
+                                <label className="mb-2 text-[11px]">{t("account_package_import")}</label>
+                                <p className="text-[10px] text-[#9496a1] mb-3 leading-relaxed">
+                                    {t("account_package_supported_desc")}
+                                </p>
+                                <div className="space-y-3">
+                                    <input
+                                        type="file"
+                                        accept=".zip"
+                                        className="w-full text-xs"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                setImportPackageFile(file);
+                                                setImportResults([]);
+                                            }
+                                        }}
+                                    />
+                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setImportOverwrite(!importOverwrite)}>
+                                        <div className={`w-12 h-7 rounded-full relative transition-all shadow-sm border-2 ${importOverwrite ? 'bg-[#8a3ffc] border-[#8a3ffc]' : 'bg-black/20 dark:bg-white/10 border-black/10 dark:border-white/30'}`}>
+                                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all shadow-md ${importOverwrite ? 'left-6' : 'left-0.5'}`}></div>
+                                        </div>
+                                        <span className={`text-[13px] cursor-pointer select-none transition-colors ${importOverwrite ? 'text-main font-bold' : 'text-main/40'}`}>
+                                            {t("overwrite_conflict")}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={handleImportPackage}
+                                        className="btn-gradient w-full h-10 !text-xs flex items-center justify-center gap-2"
+                                        disabled={!importPackageFile || importingPackage}
+                                    >
+                                        {importingPackage ? <Spinner className="animate-spin" /> : <UploadSimple weight="bold" />}
+                                        {t("account_package_import")}
+                                    </button>
+                                    {importResults.length > 0 && (
+                                        <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                                            {importResults.map((item, idx) => (
+                                                <div key={idx} className={`text-xs p-2 rounded-lg ${item.status === 'success' ? 'bg-emerald-500/5 text-emerald-400' : 'bg-red-500/5 text-red-400'}`}>
+                                                    <span className="font-bold">{item.account_name}</span>: {item.message}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="w-full h-px bg-white/5"></div>
+
+                            {/* 导出账号包 */}
+                            <div className="flex-1">
+                                <label className="mb-2 text-[11px]">{language === "zh" ? "导出账号包" : "Export Account Package"}</label>
+                                <p className="text-[10px] text-[#9496a1] mb-3 leading-relaxed">
+                                    {language === "zh" ? "导出所有账号为 Telethon 或 TData 格式" : "Export all accounts as Telethon or TData format"}
+                                </p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => handleExportPackage("telethon")}
+                                        className="btn-secondary h-10 !text-xs flex items-center justify-center gap-2"
+                                        disabled={exportingPackage !== null}
+                                    >
+                                        {exportingPackage === "telethon" ? <Spinner className="animate-spin" /> : <DownloadSimple weight="bold" />}
+                                        Telethon
+                                    </button>
+                                    <button
+                                        onClick={() => handleExportPackage("tdata")}
+                                        className="btn-secondary h-10 !text-xs flex items-center justify-center gap-2"
+                                        disabled={exportingPackage !== null}
+                                    >
+                                        {exportingPackage === "tdata" ? <Spinner className="animate-spin" /> : <DownloadSimple weight="bold" />}
+                                        TData
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

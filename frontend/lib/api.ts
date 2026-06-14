@@ -894,6 +894,28 @@ export const deleteSignTask = (token: string, name: string, accountName?: string
     method: "DELETE",
   }, token);
 
+export interface BatchDeleteTaskItem {
+  name: string;
+  account_name: string;
+}
+
+export interface BatchDeleteRequest {
+  tasks: BatchDeleteTaskItem[];
+}
+
+export interface BatchDeleteResult {
+  ok: boolean;
+  deleted: number;
+  failed: number;
+  errors: string[];
+}
+
+export const deleteSignTasksBatch = (token: string, tasks: BatchDeleteTaskItem[]) =>
+  request<BatchDeleteResult>('/sign-tasks/batch-delete', {
+    method: "POST",
+    body: JSON.stringify({ tasks }),
+  }, token);
+
 export const runSignTask = (token: string, name: string, accountName: string) =>
   request<SignTaskRunResult>(`/sign-tasks/${name}/run?account_name=${accountName}`, {
     method: "POST",

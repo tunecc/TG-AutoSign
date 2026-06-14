@@ -1120,51 +1120,6 @@ export default function Dashboard() {
       </nav>
 
       <main className="main-content">
-        <div className="dashboard-toolbar">
-          <div>
-            <div className="text-sm font-bold text-main">{t("sidebar_accounts")}</div>
-            <div className="text-xs text-main/40">{accounts.length} {t("sidebar_accounts")}</div>
-          </div>
-          <div className="dashboard-toolbar-actions">
-            <button
-              className="btn-secondary dashboard-tool-btn"
-              onClick={() => router.push("/dashboard/sign-tasks/create")}
-              disabled={loading}
-              title={t("task_center_entry_hint")}
-            >
-              <Plus weight="bold" size={16} />
-              <span>{t("task_center")}</span>
-            </button>
-            <button
-              className="btn-secondary dashboard-tool-btn"
-              onClick={openImportDialog}
-              disabled={loading || importingPackage}
-              title={t("account_package_import")}
-            >
-              <UploadSimple weight="bold" size={16} />
-              <span>{t("account_package_import")}</span>
-            </button>
-            <button
-              className="btn-secondary dashboard-tool-btn"
-              onClick={() => handleExportPackage("telethon")}
-              disabled={loading || accounts.length === 0 || exportingPackage !== null}
-              title={t("account_package_export_telethon")}
-            >
-              {exportingPackage === "telethon" ? <Spinner className="animate-spin" size={16} /> : <DownloadSimple weight="bold" size={16} />}
-              <span>{t("account_package_export_telethon")}</span>
-            </button>
-            <button
-              className="btn-secondary dashboard-tool-btn"
-              onClick={() => handleExportPackage("tdata")}
-              disabled={loading || accounts.length === 0 || exportingPackage !== null}
-              title={t("account_package_export_tdata")}
-            >
-              {exportingPackage === "tdata" ? <Spinner className="animate-spin" size={16} /> : <DownloadSimple weight="bold" size={16} />}
-              <span>{t("account_package_export_tdata")}</span>
-            </button>
-          </div>
-        </div>
-
         {loading && accounts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-main/30">
             <Spinner className="animate-spin mb-4" size={32} />
@@ -1264,6 +1219,17 @@ export default function Dashboard() {
               </div>
               <span className="text-xs font-bold" style={{ color: 'var(--text-sub)' }}>{t("add_account")}</span>
             </div>
+
+            {/* 任务中心入口卡片 */}
+            <Link
+              href="/dashboard/sign-tasks"
+              className="card card-add !h-44 !bg-gradient-to-br !from-[#8a3ffc]/10 !to-[#e83ffc]/10 hover:!from-[#8a3ffc]/20 hover:!to-[#e83ffc]/20 border-[#8a3ffc]/30"
+            >
+              <div className="add-icon-circle !w-10 !h-10 !bg-[#8a3ffc]/20 !text-[#b57dff]">
+                <Lightning weight="fill" size={20} />
+              </div>
+              <span className="text-xs font-bold text-[#b57dff]">{language === "zh" ? "任务中心" : "Task Center"}</span>
+            </Link>
           </div>
         )}
       </main>

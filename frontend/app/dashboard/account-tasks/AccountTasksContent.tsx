@@ -7,6 +7,7 @@ import { getToken } from "../../../lib/auth";
 import {
     listSignTasks,
     deleteSignTask,
+    deleteSignTasksBatch,
     runSignTask,
     getSignTaskHistory,
     getAccountChats,
@@ -22,6 +23,7 @@ import {
     SignTaskMessageEvent,
     ChatInfo,
     CreateSignTaskRequest,
+    BatchDeleteTaskItem,
 } from "../../../lib/api";
 import {
     CaretLeft,
@@ -44,8 +46,11 @@ import {
     Copy,
     ClipboardText,
     Export,
+    CheckSquare,
+    Square,
 } from "@phosphor-icons/react";
 import { ToastContainer, useToast } from "../../../components/ui/toast";
+import { TaskBatchActionsBar } from "../../../components/TaskBatchActionsBar";
 import { SignTaskFlowLogLine } from "../../../components/SignTaskFlowLogLine";
 import { useLanguage } from "../../../context/LanguageContext";
 
@@ -66,10 +71,13 @@ const isDuplicateRunMessage = (message?: string) => {
 };
 
 // Memoized Task Item Component
-const TaskItem = memo(({ task, loading, isRunning, onEdit, onRun, onViewLogs, onCopy, onDelete, t, language }: {
+const TaskItem = memo(({ task, loading, isRunning, isSelected, selectionMode, onToggleSelection, onEdit, onRun, onViewLogs, onCopy, onDelete, t, language }: {
     task: SignTask;
     loading: boolean;
     isRunning?: boolean;
+    isSelected?: boolean;
+    selectionMode?: boolean;
+    onToggleSelection?: () => void;
     onEdit: (task: SignTask) => void;
     onRun: (name: string) => void;
     onViewLogs: (task: SignTask) => void;
@@ -81,8 +89,17 @@ const TaskItem = memo(({ task, loading, isRunning, onEdit, onRun, onViewLogs, on
     const copyTaskTitle = language === "zh" ? "\u590D\u5236\u4EFB\u52A1" : "Copy Task";
 
     return (
-        <div className={`glass-panel p-4 md:p-5 group transition-all ${isRunning ? 'border-[#8a3ffc]/50' : 'hover:border-[#8a3ffc]/30'}`}>
+        <div className={`glass-panel p-4 md:p-5 group transition-all ${isRunning ? 'border-[#8a3ffc]/50' : isSelected ? 'border-[#8a3ffc]/60 bg-[#8a3ffc]/5' : 'hover:border-[#8a3ffc]/30'}`}>
             <div className="flex items-start gap-4 min-w-0">
+                {selectionMode && onToggleSelection && (
+                    <button onClick={onToggleSelection} className="mt-2">
+                        {isSelected ? (
+                            <CheckSquare weight="fill" size={20} className="text-[#8a3ffc]" />
+                        ) : (
+                            <Square weight="bold" size={20} />
+                        )}
+                    </button>
+                )}
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-[#b57dff] shrink-0 ${isRunning ? 'bg-[#8a3ffc]/25' : 'bg-[#8a3ffc]/15'}`}>
                     {isRunning
                         ? <Spinner weight="bold" size={20} className="animate-spin" />
@@ -333,6 +350,10 @@ export default function AccountTasksContent() {
     const [copyingConfig, setCopyingConfig] = useState(false);
     const [importingPastedConfig, setImportingPastedConfig] = useState(false);
     const [batchImportOverwrite, setBatchImportOverwrite] = useState(false);
+
+    // 批量操作状态
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
 
     const [checking, setChecking] = useState(true);
     const [runningTaskName, setRunningTaskName] = useState<string | null>(null);
@@ -605,6 +626,71 @@ export default function AccountTasksContent() {
             setLoading(false);
         }
     }, [token, accountName, loadData, formatErrorMessage]);
+
+    // 批量操作函数
+    const toggleTaskSelection = (taskName: string) => {
+        setSelectedTasks(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(taskName)) {
+                newSet.delete(taskName);
+            } else {
+                newSet.add(taskName);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedTasks.size === tasks.length) {
+            setSelectedTasks(new Set());
+        } else {
+            setSelectedTasks(new Set(tasks.map(t => t.name)));
+        }
+    };
+
+    const handleBatchDelete = async () => {
+        if (!token || selectedTasks.size === 0) return;
+
+        const confirmMsg = language === "zh"
+            ? `确认删除 ${selectedTasks.size} 个任务？`
+            : `Delete ${selectedTasks.size} tasks?`;
+
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            setLoading(true);
+            const tasksToDelete = Array.from(selectedTasks).map(name => ({
+                name,
+                account_name: accountName,
+            }));
+
+            const result = await deleteSignTasksBatch(token, tasksToDelete);
+
+            if (result.ok) {
+                addToast(
+                    language === "zh"
+                        ? `成功删除 ${result.deleted} 个任务`
+                        : `Successfully deleted ${result.deleted} tasks`,
+                    "success"
+                );
+            } else {
+                addToast(
+                    language === "zh"
+                        ? `删除完成：成功 ${result.deleted} 个，失败 ${result.failed} 个`
+                        : `Deleted ${result.deleted} tasks, ${result.failed} failed`,
+                    result.failed > 0 ? "error" : "success"
+                );
+            }
+
+            setSelectedTasks(new Set());
+            setSelectionMode(false);
+            await loadData(token);
+        } catch (err: any) {
+            addToast(formatErrorMessage("delete_failed", err), "error");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleRunTask = useCallback(async (taskName: string) => {
         if (!token) return;
@@ -1065,24 +1151,36 @@ export default function AccountTasksContent() {
                     >
                         <ArrowClockwise weight="bold" size={18} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button
-                        onClick={handleExportAllTasks}
-                        disabled={loading}
-                        className="action-btn !w-auto !h-8 !px-3 gap-1.5 !text-amber-400 hover:bg-amber-500/10"
-                        title={isZh ? "批量导出全部任务" : "Export all tasks"}
-                    >
-                        <Export weight="bold" size={18} />
-                        <span className="hidden sm:inline text-[10px] font-bold">{isZh ? "批量导出" : "Export"}</span>
-                    </button>
-                    <button
-                        onClick={handlePasteTask}
-                        disabled={loading}
-                        className="action-btn !w-auto !h-8 !px-3 gap-1.5 !text-sky-400 hover:bg-sky-500/10"
-                        title={pasteTaskTitle}
-                    >
-                        <ClipboardText weight="bold" size={18} />
-                        <span className="hidden sm:inline text-[10px] font-bold">{isZh ? "粘贴导入" : "Paste"}</span>
-                    </button>
+                    {!selectionMode && (
+                        <>
+                            <button
+                                onClick={() => setSelectionMode(true)}
+                                disabled={loading || tasks.length === 0}
+                                className="action-btn !w-8 !h-8"
+                                title={isZh ? "选择" : "Select"}
+                            >
+                                <CheckSquare weight="bold" size={18} />
+                            </button>
+                            <button
+                                onClick={handleExportAllTasks}
+                                disabled={loading}
+                                className="action-btn !w-auto !h-8 !px-3 gap-1.5 !text-amber-400 hover:bg-amber-500/10"
+                                title={isZh ? "批量导出全部任务" : "Export all tasks"}
+                            >
+                                <Export weight="bold" size={18} />
+                                <span className="hidden sm:inline text-[10px] font-bold">{isZh ? "批量导出" : "Export"}</span>
+                            </button>
+                            <button
+                                onClick={handlePasteTask}
+                                disabled={loading}
+                                className="action-btn !w-auto !h-8 !px-3 gap-1.5 !text-sky-400 hover:bg-sky-500/10"
+                                title={pasteTaskTitle}
+                            >
+                                <ClipboardText weight="bold" size={18} />
+                                <span className="hidden sm:inline text-[10px] font-bold">{isZh ? "粘贴导入" : "Paste"}</span>
+                            </button>
+                        </>
+                    )}
                     <button onClick={() => setShowCreateDialog(true)} className="action-btn !w-8 !h-8 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10" title={t("add_task")}>
                         <Plus weight="bold" size={18} />
                     </button>
@@ -1090,6 +1188,20 @@ export default function AccountTasksContent() {
             </nav>
 
             <main className="main-content !pt-6">
+                {selectionMode && (
+                    <TaskBatchActionsBar
+                        selectedCount={selectedTasks.size}
+                        totalCount={tasks.length}
+                        isAllSelected={selectedTasks.size === tasks.length && tasks.length > 0}
+                        onSelectAll={toggleSelectAll}
+                        onClearSelection={() => { setSelectionMode(false); setSelectedTasks(new Set()); }}
+                        onBatchDelete={handleBatchDelete}
+                        deleteLabel={isZh ? "批量删除" : "Delete"}
+                        clearLabel={isZh ? "取消" : "Cancel"}
+                        selectAllLabel={isZh ? "全选" : "Select All"}
+                        selectedLabel={isZh ? "已选 {count}/{total}" : "Selected {count}/{total}"}
+                    />
+                )}
 
                 {loading && tasks.length === 0 ? (
                     <div className="w-full py-20 flex flex-col items-center justify-center text-main/20">
@@ -1112,6 +1224,9 @@ export default function AccountTasksContent() {
                                 task={task}
                                 loading={loading}
                                 isRunning={runningTaskName === task.name}
+                                isSelected={selectedTasks.has(task.name)}
+                                selectionMode={selectionMode}
+                                onToggleSelection={() => toggleTaskSelection(task.name)}
                                 onEdit={handleEditTask}
                                 onRun={handleRunTask}
                                 onViewLogs={handleShowTaskHistory}
@@ -1521,7 +1636,7 @@ export default function AccountTasksContent() {
 
             {copyTaskDialog && (
                 <div className="modal-overlay active">
-                    <div className="glass-panel modal-content !max-w-3xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="glass-panel modal-content !max-w-5xl flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <header className="modal-header border-b border-white/5 pb-3 mb-0">
                             <div className="modal-title flex items-center gap-2 !text-base">
                                 <Copy weight="bold" size={18} />
@@ -1561,7 +1676,7 @@ export default function AccountTasksContent() {
 
             {showPasteDialog && (
                 <div className="modal-overlay active">
-                    <div className="glass-panel modal-content !max-w-3xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="glass-panel modal-content !max-w-5xl flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <header className="modal-header border-b border-white/5 pb-3 mb-0">
                             <div className="modal-title flex items-center gap-2 !text-base">
                                 <ClipboardText weight="bold" size={18} />

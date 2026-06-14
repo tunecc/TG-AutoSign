@@ -433,6 +433,68 @@ async def delete_sign_task(
     return {"ok": True}
 
 
+class BatchDeleteTaskItem(BaseModel):
+    """批量删除任务项"""
+    name: str = Field(..., description="任务名称")
+    account_name: str = Field(..., description="账号名称")
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除请求"""
+    tasks: List[BatchDeleteTaskItem] = Field(..., description="要删除的任务列表")
+
+
+class BatchDeleteResult(BaseModel):
+    """批量删除结果"""
+    ok: bool = Field(..., description="是否全部成功")
+    deleted: int = Field(..., description="成功删除的任务数")
+    failed: int = Field(..., description="失败的任务数")
+    errors: List[str] = Field(default_factory=list, description="错误信息列表")
+
+
+@router.post("/batch-delete", response_model=BatchDeleteResult)
+async def batch_delete_sign_tasks(
+    payload: BatchDeleteRequest,
+    current_user=Depends(get_current_user),
+):
+    """批量删除签到任务"""
+    deleted_count = 0
+    failed_count = 0
+    errors: List[str] = []
+
+    for task_item in payload.tasks:
+        try:
+            success = get_sign_task_service().delete_task(
+                task_item.name,
+                account_name=task_item.account_name
+            )
+            if success:
+                deleted_count += 1
+            else:
+                failed_count += 1
+                errors.append(f"任务 {task_item.account_name}:{task_item.name} 不存在")
+        except Exception as e:
+            failed_count += 1
+            errors.append(f"删除任务 {task_item.account_name}:{task_item.name} 失败: {str(e)}")
+            logger.exception(
+                "批量删除任务失败: 账号=%s, 任务=%s, 错误=%s",
+                task_item.account_name,
+                task_item.name,
+                describe_exception(e),
+            )
+
+    # 同步调度器
+    from backend.scheduler import sync_jobs
+    await sync_jobs()
+
+    return BatchDeleteResult(
+        ok=(failed_count == 0),
+        deleted=deleted_count,
+        failed=failed_count,
+        errors=errors
+    )
+
+
 @router.post("/{task_name}/run", response_model=RunTaskSubmission)
 async def run_sign_task(
     task_name: str,
