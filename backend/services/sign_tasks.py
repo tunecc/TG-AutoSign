@@ -19,6 +19,10 @@ from backend.core.runtime_config import (
     get_sign_task_runtime_config,
     get_telegram_api_runtime_config,
 )
+from backend.services.action_interval import (
+    IntervalValidationError,
+    normalize_chat_interval,
+)
 from backend.services.notifications import (
     dispatch_notification,
     get_notification_service,
@@ -51,11 +55,8 @@ def _timestamped_log(message: str) -> str:
 
 
 def _normalize_chat_action_interval(chat: dict, config_version) -> dict:
-    """Migrate action_interval from seconds to milliseconds for configs older than v4."""
-    normalized = dict(chat)
-    if config_version is None or config_version < 4:
-        normalized["action_interval"] = int(float(normalized.get("action_interval", 1)) * 1000)
-    return normalized
+    """Normalize chat action-interval fields (v3→ms + full interval shape)."""
+    return normalize_chat_interval(chat, config_version)
 
 
 def _normalize_legacy_chat_actions(chat: dict) -> dict:
@@ -908,6 +909,13 @@ class SignTaskService:
         if sign_interval is None:
             sign_interval = random.randint(1, 120)
 
+        chats = [
+            normalize_chat_interval(
+                c if isinstance(c, dict) else dict(c), config_version=4
+            )
+            for c in chats
+        ]
+
         config = {
             "_version": 4,
             "account_name": account_name,
@@ -987,6 +995,14 @@ class SignTaskService:
         )
 
         # 更新配置
+        if chats is not None:
+            chats = [
+                normalize_chat_interval(
+                    c if isinstance(c, dict) else dict(c), config_version=4
+                )
+                for c in chats
+            ]
+
         config = {
             "_version": 4,
             "account_name": acc_name,

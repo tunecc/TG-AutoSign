@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import (
     APIRouter,
@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from backend.core.auth import get_current_user, verify_token
 from backend.core.database import get_db
 from backend.core.logging import describe_exception
+from backend.services.action_interval import IntervalValidationError
 from backend.services.sign_task_runner import get_sign_task_runner
 from backend.services.sign_tasks import get_sign_task_service
 
@@ -82,7 +83,13 @@ class ChatConfig(BaseModel):
     name: str = Field("", description="Chat 名称")
     actions: List[Dict[str, Any]] = Field(..., description="动作列表")
     delete_after: Optional[int] = Field(None, description="删除延迟（秒）")
-    action_interval: int = Field(1000, description="动作间隔（毫秒）")
+    action_interval: int = Field(1000, description="兼容：动作间隔（毫秒）")
+    action_interval_mode: Optional[Literal["fixed", "random"]] = Field(
+        None, description="fixed | random"
+    )
+    action_interval_ms: Optional[int] = Field(None, description="固定间隔毫秒")
+    action_interval_min_ms: Optional[int] = Field(None, description="随机下限毫秒")
+    action_interval_max_ms: Optional[int] = Field(None, description="随机上限毫秒")
 
 
 class SignTaskCreate(BaseModel):
@@ -325,6 +332,8 @@ async def create_sign_task(
         await sync_jobs()
 
         return task
+    except IntervalValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
@@ -398,6 +407,8 @@ async def update_sign_task(
         return task
     except HTTPException:
         raise
+    except IntervalValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
