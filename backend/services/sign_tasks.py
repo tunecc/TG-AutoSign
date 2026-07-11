@@ -20,7 +20,6 @@ from backend.core.runtime_config import (
     get_telegram_api_runtime_config,
 )
 from backend.services.action_interval import (
-    IntervalValidationError,
     normalize_chat_interval,
 )
 from backend.services.notifications import (
@@ -892,6 +891,15 @@ class SignTaskService:
         if not account_name:
             raise ValueError("必须指定账号名称")
 
+        # Validate/normalize chats before any directory creation so invalid
+        # intervals never leave an empty signs/<account>/<task>/ behind.
+        chats = [
+            normalize_chat_interval(
+                c if isinstance(c, dict) else dict(c), config_version=4
+            )
+            for c in chats
+        ]
+
         account_dir = self.signs_dir / account_name
         account_dir.mkdir(parents=True, exist_ok=True)
 
@@ -908,13 +916,6 @@ class SignTaskService:
 
         if sign_interval is None:
             sign_interval = random.randint(1, 120)
-
-        chats = [
-            normalize_chat_interval(
-                c if isinstance(c, dict) else dict(c), config_version=4
-            )
-            for c in chats
-        ]
 
         config = {
             "_version": 4,
