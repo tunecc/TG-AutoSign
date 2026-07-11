@@ -13,6 +13,13 @@ import {
     SignTaskChat,
 } from "../../../../lib/api";
 import {
+    formatChatIntervalSummary,
+    hmsToMs,
+    msToHms,
+    normalizeChatInterval,
+    validateIntervalFields,
+} from "../../../../lib/duration";
+import {
     CaretLeft,
     Plus,
     X,
@@ -25,8 +32,10 @@ import {
     MathOperations,
     Lightning,
     Check,
-    ArrowClockwise
+    ArrowClockwise,
+    PencilSimple,
 } from "@phosphor-icons/react";
+
 import { ThemeLanguageToggle } from "../../../../components/ThemeLanguageToggle";
 import { useLanguage } from "../../../../context/LanguageContext";
 import { ToastContainer, useToast } from "../../../../components/ui/toast";
@@ -158,7 +167,13 @@ export default function CreateSignTaskPage() {
         actions: any[];
         delete_after?: number;
         action_interval: number;
+        action_interval_mode: "fixed" | "random";
+        action_interval_ms: number;
+        action_interval_min_ms: number;
+        action_interval_max_ms: number;
+        editIndex?: number; // undefined = add, number = replace chats[editIndex]
     } | null>(null);
+
 
     const loadChats = useCallback(async (tokenStr: string, accountName: string, forceRefresh = false) => {
         try {
@@ -308,8 +323,13 @@ export default function CreateSignTaskPage() {
             manual_chat_id: "",
             actions: [{ action: 1, text: "" }],
             action_interval: 1000,
+            action_interval_mode: "fixed",
+            action_interval_ms: 1000,
+            action_interval_min_ms: 1000,
+            action_interval_max_ms: 1000,
         });
     };
+
 
     const applyChatSelection = (chatId: number, chatName: string) => {
         if (!editingChat) return;
@@ -351,21 +371,32 @@ export default function CreateSignTaskPage() {
             addToast(t("add_action_error"), "error");
             return;
         }
-        const { manual_chat_id: _manualChatId, ...chatConfig } = editingChat;
-        const actionInterval = Number(chatConfig.action_interval);
-        const deleteAfter = chatConfig.delete_after;
-        setChats([
-            ...chats,
-            {
-                ...chatConfig,
-                chat_id: resolvedChatId,
-                name: chatConfig.name || `chat_${resolvedChatId}`,
-                delete_after: deleteAfter === undefined ? undefined : Number(deleteAfter),
-                action_interval: Number.isFinite(actionInterval) && actionInterval > 0 ? actionInterval : 1000,
-            },
-        ]);
+        const intervalErr = validateIntervalFields(editingChat);
+        if (intervalErr) {
+            addToast(t(intervalErr), "error");
+            return;
+        }
+        const interval = normalizeChatInterval(editingChat);
+        const { manual_chat_id: _m, editIndex, ...rest } = editingChat;
+        const chatPayload = {
+            ...rest,
+            ...interval,
+            chat_id: resolvedChatId,
+            name: rest.name || `chat_${resolvedChatId}`,
+            delete_after: rest.delete_after === undefined ? undefined : Number(rest.delete_after),
+        };
+
+        setChats((prev) => {
+            if (typeof editIndex === "number" && editIndex >= 0 && editIndex < prev.length) {
+                const next = [...prev];
+                next[editIndex] = chatPayload;
+                return next;
+            }
+            return [...prev, chatPayload];
+        });
         setEditingChat(null);
     };
+
 
     const selectedAccountCount = accountSchedules.filter(row => row.selected).length;
 
@@ -752,17 +783,38 @@ export default function CreateSignTaskPage() {
                                                         {t("id_label")}: {chat.chat_id} | <span className="text-[#8a3ffc]/60 font-bold">{chat.actions.length} {t("actions_count")}</span>
                                                     </div>
                                                     <div className="text-[10px] text-main/30 font-mono mt-0.5">
-                                                        {t("action_interval")}: {chat.action_interval || 1000}ms
+                                                        {t("action_interval")}: {formatChatIntervalSummary(chat)}
                                                         {chat.delete_after ? ` | ${t("task_flow_delete_after")}: ${chat.delete_after}s` : ""}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={() => setChats(chats.filter((_, i) => i !== idx))}
-                                                className="action-btn status-action-danger"
-                                            >
-                                                <Trash weight="bold" />
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="action-btn"
+                                                    title={t("edit_chat")}
+                                                    onClick={() => {
+                                                        const n = normalizeChatInterval(chat);
+                                                        setEditingChat({
+                                                            chat_id: chat.chat_id,
+                                                            name: chat.name,
+                                                            manual_chat_id: String(chat.chat_id),
+                                                            actions: chat.actions || [],
+                                                            delete_after: chat.delete_after,
+                                                            ...n,
+                                                            editIndex: idx,
+                                                        });
+                                                    }}
+                                                >
+                                                    <PencilSimple weight="bold" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setChats(chats.filter((_, i) => i !== idx))}
+                                                    className="action-btn status-action-danger"
+                                                >
+                                                    <Trash weight="bold" />
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -783,7 +835,7 @@ export default function CreateSignTaskPage() {
             {
                 editingChat && (
                     <div className="modal-overlay active fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="glass-panel modal-content w-full max-w-5xl max-h-[calc(100vh-2rem)] animate-scale-in flex flex-col overflow-hidden">
+                        <div className="glass-panel modal-content w-full max-w-6xl w-[min(96vw,72rem)] max-h-[calc(100vh-2rem)] animate-scale-in flex flex-col overflow-hidden">
                             <header className="p-6 border-b border-white/5 flex justify-between items-center bg-black/5">
                                 <h2 className="text-xl font-bold flex items-center gap-3">
                                     <div className="p-2 bg-[#8a3ffc]/10 rounded-lg text-[#b57dff]">
@@ -907,21 +959,134 @@ export default function CreateSignTaskPage() {
                                                 }}
                                             />
                                         </div>
-                                        <div className="space-y-2 md:col-span-2">
+                                        <div className="space-y-3 md:col-span-2">
                                             <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("action_interval")}</label>
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                className="!mb-0"
-                                                value={editingChat.action_interval}
-                                                onChange={(e) => {
-                                                    const val = parseInt(e.target.value, 10) || 1000;
-                                                    setEditingChat({
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    className={`btn-secondary !h-8 !px-3 !text-[10px] ${editingChat.action_interval_mode === "fixed" ? "!bg-[#8a3ffc]/20 !border-[#8a3ffc]/40" : ""}`}
+                                                    onClick={() => setEditingChat({
                                                         ...editingChat,
-                                                        action_interval: val,
-                                                    });
-                                                }}
-                                            />
+                                                        action_interval_mode: "fixed",
+                                                        action_interval_ms: editingChat.action_interval_ms,
+                                                        action_interval: editingChat.action_interval_ms,
+                                                        action_interval_min_ms: editingChat.action_interval_ms,
+                                                        action_interval_max_ms: editingChat.action_interval_ms,
+                                                    })}
+                                                >
+                                                    {t("action_interval_fixed")}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn-secondary !h-8 !px-3 !text-[10px] ${editingChat.action_interval_mode === "random" ? "!bg-[#8a3ffc]/20 !border-[#8a3ffc]/40" : ""}`}
+                                                    onClick={() => setEditingChat({
+                                                        ...editingChat,
+                                                        action_interval_mode: "random",
+                                                        action_interval_min_ms: editingChat.action_interval_min_ms || editingChat.action_interval_ms,
+                                                        action_interval_max_ms: editingChat.action_interval_max_ms || editingChat.action_interval_ms,
+                                                    })}
+                                                >
+                                                    {t("action_interval_random")}
+                                                </button>
+                                            </div>
+                                            {editingChat.action_interval_mode === "fixed" ? (
+                                                <div className="flex gap-2 items-end">
+                                                    {(["h", "m", "s"] as const).map((part) => {
+                                                        const fixedHms = msToHms(editingChat.action_interval_ms);
+                                                        return (
+                                                            <div key={part} className="space-y-1">
+                                                                <label className="text-[10px]">
+                                                                    {t(part === "h" ? "interval_hour" : part === "m" ? "interval_minute" : "interval_second")}
+                                                                </label>
+                                                                <input
+                                                                    inputMode="numeric"
+                                                                    className="!mb-0 w-16"
+                                                                    value={fixedHms[part]}
+                                                                    onChange={(e) => {
+                                                                        const raw = e.target.value.replace(/[^0-9]/g, "");
+                                                                        const n = raw === "" ? 0 : Number(raw);
+                                                                        const next = { ...fixedHms, [part]: n };
+                                                                        const ms = hmsToMs(next.h, next.m, next.s);
+                                                                        setEditingChat({
+                                                                            ...editingChat,
+                                                                            action_interval_ms: ms,
+                                                                            action_interval: ms,
+                                                                            action_interval_min_ms: ms,
+                                                                            action_interval_max_ms: ms,
+                                                                        });
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <p className="text-[10px] text-main/40">{t("action_interval_hint")}</p>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-main/40 uppercase tracking-wider">min</label>
+                                                        <div className="flex gap-2 items-end">
+                                                            {(["h", "m", "s"] as const).map((part) => {
+                                                                const minHms = msToHms(editingChat.action_interval_min_ms);
+                                                                return (
+                                                                    <div key={`min-${part}`} className="space-y-1">
+                                                                        <label className="text-[10px]">
+                                                                            {t(part === "h" ? "interval_hour" : part === "m" ? "interval_minute" : "interval_second")}
+                                                                        </label>
+                                                                        <input
+                                                                            inputMode="numeric"
+                                                                            className="!mb-0 w-16"
+                                                                            value={minHms[part]}
+                                                                            onChange={(e) => {
+                                                                                const raw = e.target.value.replace(/[^0-9]/g, "");
+                                                                                const n = raw === "" ? 0 : Number(raw);
+                                                                                const next = { ...minHms, [part]: n };
+                                                                                const ms = hmsToMs(next.h, next.m, next.s);
+                                                                                setEditingChat({
+                                                                                    ...editingChat,
+                                                                                    action_interval_min_ms: ms,
+                                                                                    action_interval_ms: ms,
+                                                                                    action_interval: ms,
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-main/40 uppercase tracking-wider">max</label>
+                                                        <div className="flex gap-2 items-end">
+                                                            {(["h", "m", "s"] as const).map((part) => {
+                                                                const maxHms = msToHms(editingChat.action_interval_max_ms);
+                                                                return (
+                                                                    <div key={`max-${part}`} className="space-y-1">
+                                                                        <label className="text-[10px]">
+                                                                            {t(part === "h" ? "interval_hour" : part === "m" ? "interval_minute" : "interval_second")}
+                                                                        </label>
+                                                                        <input
+                                                                            inputMode="numeric"
+                                                                            className="!mb-0 w-16"
+                                                                            value={maxHms[part]}
+                                                                            onChange={(e) => {
+                                                                                const raw = e.target.value.replace(/[^0-9]/g, "");
+                                                                                const n = raw === "" ? 0 : Number(raw);
+                                                                                const next = { ...maxHms, [part]: n };
+                                                                                const ms = hmsToMs(next.h, next.m, next.s);
+                                                                                setEditingChat({
+                                                                                    ...editingChat,
+                                                                                    action_interval_max_ms: ms,
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -938,7 +1103,7 @@ export default function CreateSignTaskPage() {
                                         </button>
                                     </div>
 
-                                    <div className="max-h-[260px] overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                                    <div className="max-h-[min(50vh,420px)] overflow-y-auto space-y-3 custom-scrollbar pr-2">
                                         {editingChat.actions.map((act, i) => (
                                             <div key={i} className="flex flex-col md:flex-row gap-3 md:items-center animate-scale-in rounded-xl border border-white/5 bg-black/5 p-3">
                                                 <div className="shrink-0 w-6 h-10 flex items-center justify-center font-mono text-[10px] text-main/20 font-bold border-r border-white/5">
