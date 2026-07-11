@@ -48,6 +48,7 @@ import { ToastContainer, useToast } from "../../../components/ui/toast";
 import { TaskBatchActionsBar } from "../../../components/TaskBatchActionsBar";
 import { SignTaskFlowLogLine } from "../../../components/SignTaskFlowLogLine";
 import { useLanguage } from "../../../context/LanguageContext";
+import { buildCreateTaskPath, buildEditTaskPath } from "../../../lib/task-form-nav";
 
 const truncateSummaryText = (text: string, limit = 200) => {
     if (text.length <= limit) return text;
@@ -634,7 +635,7 @@ export default function SignTasksPage() {
                         </>
                     )}
                     <Link
-                        href="/dashboard/sign-tasks/create"
+                        href={buildCreateTaskPath({ from: "sign-tasks" })}
                         className={`action-btn !w-8 !h-8 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10 ${loading ? 'pointer-events-none opacity-20' : ''}`}
                         title={t("add_task")}
                     >
@@ -706,7 +707,7 @@ export default function SignTasksPage() {
                         <p className="text-xs uppercase tracking-widest font-bold font-mono">{t("login_loading")}</p>
                     </div>
                 ) : filteredTasks.length === 0 ? (
-                    <div className="glass-panel p-20 flex flex-col items-center text-center justify-center border-dashed border-2 group hover:border-[#8a3ffc]/30 transition-all cursor-pointer" onClick={() => router.push("/dashboard/sign-tasks/create")}>
+                    <div className="glass-panel p-20 flex flex-col items-center text-center justify-center border-dashed border-2 group hover:border-[#8a3ffc]/30 transition-all cursor-pointer" onClick={() => router.push(buildCreateTaskPath({ from: "sign-tasks" }))}>
                         <div className="w-20 h-20 rounded-3xl bg-main/5 flex items-center justify-center text-main/20 mb-6 group-hover:scale-110 transition-transform group-hover:bg-[#8a3ffc]/10 group-hover:text-[#8a3ffc]">
                             <Plus size={40} weight="bold" />
                         </div>
@@ -826,7 +827,11 @@ export default function SignTasksPage() {
                                                             <Play weight="fill" size={12} />
                                                         </button>
                                                         <Link
-                                                            href={`/dashboard/account-tasks?name=${task.account_name}`}
+                                                            href={buildEditTaskPath({
+                                                                account: task.account_name,
+                                                                name: task.name,
+                                                                from: "sign-tasks",
+                                                            })}
                                                             className="action-btn !w-7 !h-7"
                                                             title={t("edit")}
                                                         >
@@ -952,7 +957,11 @@ export default function SignTasksPage() {
                                             <Play weight="fill" size={14} />
                                         </button>
                                         <Link
-                                            href={`/dashboard/account-tasks?name=${task.account_name}`}
+                                            href={buildEditTaskPath({
+                                                account: task.account_name,
+                                                name: task.name,
+                                                from: "sign-tasks",
+                                            })}
                                             className="action-btn !w-8 !h-8 flex-1"
                                             title={t("edit")}
                                         >
