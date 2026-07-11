@@ -835,7 +835,7 @@ export default function CreateSignTaskPage() {
             {
                 editingChat && (
                     <div className="modal-overlay active fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-3">
-                        <div className="glass-panel modal-content w-full max-w-7xl w-[min(98vw,80rem)] max-h-[calc(100vh-1rem)] animate-scale-in flex flex-col overflow-hidden">
+                        <div className="glass-panel modal-content !w-[min(98vw,90rem)] !max-w-[min(98vw,90rem)] max-h-[calc(100vh-1rem)] animate-scale-in flex flex-col overflow-hidden">
                             <header className="p-6 border-b border-white/5 flex justify-between items-center bg-black/5">
                                 <h2 className="text-xl font-bold flex items-center gap-3">
                                     <div className="p-2 bg-[#8a3ffc]/10 rounded-lg text-[#b57dff]">
