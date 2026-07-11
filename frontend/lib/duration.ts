@@ -50,11 +50,7 @@ export function normalizeChatInterval<T extends IntervalFields>(chat: T): T & {
     if (!Number.isFinite(min) || min < 0) min = Number(chat.action_interval_ms);
     if (!Number.isFinite(min) || min < 0) min = legacyMs;
     if (!Number.isFinite(max) || max < 0) max = min;
-    if (min > max) {
-      const t = min;
-      min = max;
-      max = t;
-    }
+    // Do not silent-swap min/max — callers must validate first (toast + block submit).
     return {
       ...chat,
       action_interval_mode: "random",
@@ -86,8 +82,10 @@ export function formatChatIntervalSummary(chat: IntervalFields): string {
 }
 
 export function validateIntervalFields(chat: IntervalFields): string | null {
-  const n = normalizeChatInterval(chat);
-  if (n.action_interval_mode === "random" && n.action_interval_min_ms > n.action_interval_max_ms) {
+  if (chat.action_interval_mode !== "random") return null;
+  const min = Number(chat.action_interval_min_ms);
+  const max = Number(chat.action_interval_max_ms);
+  if (Number.isFinite(min) && Number.isFinite(max) && min > max) {
     return "interval_min_gt_max";
   }
   return null;

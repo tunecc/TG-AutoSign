@@ -1487,8 +1487,8 @@ export default function AccountTasksContent() {
             )}
 
             {editingChat && (
-                <div className="modal-overlay active fixed inset-0 z-[110] flex items-center justify-center p-4">
-                    <div className="glass-panel modal-content w-full max-w-6xl w-[min(96vw,72rem)] max-h-[calc(100vh-2rem)] animate-scale-in flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay active fixed inset-0 z-[110] flex items-center justify-center p-2 sm:p-3">
+                    <div className="glass-panel modal-content w-full max-w-7xl w-[min(98vw,80rem)] max-h-[calc(100vh-1rem)] animate-scale-in flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                         <header className="p-6 border-b border-white/5 flex justify-between items-center bg-black/5">
                             <h2 className="text-xl font-bold flex items-center gap-3">
                                 <div className="p-2 bg-[#8a3ffc]/10 rounded-lg text-[#b57dff]">
@@ -1637,8 +1637,8 @@ export default function AccountTasksContent() {
                                                 onClick={() => setEditingChat({
                                                     ...editingChat,
                                                     action_interval_mode: "random",
-                                                    action_interval_min_ms: editingChat.action_interval_min_ms || editingChat.action_interval_ms,
-                                                    action_interval_max_ms: editingChat.action_interval_max_ms || editingChat.action_interval_ms,
+                                                    action_interval_min_ms: editingChat.action_interval_min_ms ?? editingChat.action_interval_ms,
+                                                    action_interval_max_ms: editingChat.action_interval_max_ms ?? editingChat.action_interval_ms,
                                                 })}
                                             >
                                                 {t("action_interval_random")}
@@ -1679,7 +1679,7 @@ export default function AccountTasksContent() {
                                             <div className="space-y-3">
                                                 <p className="text-[10px] text-main/40">{t("action_interval_hint")}</p>
                                                 <div className="space-y-1">
-                                                    <label className="text-[10px] text-main/40 uppercase tracking-wider">min</label>
+                                                    <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("action_interval_min")}</label>
                                                     <div className="flex gap-2 items-end">
                                                         {(["h", "m", "s"] as const).map((part) => {
                                                             const minHms = msToHms(editingChat.action_interval_min_ms);
@@ -1711,7 +1711,7 @@ export default function AccountTasksContent() {
                                                     </div>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[10px] text-main/40 uppercase tracking-wider">max</label>
+                                                    <label className="text-[10px] text-main/40 uppercase tracking-wider">{t("action_interval_max")}</label>
                                                     <div className="flex gap-2 items-end">
                                                         {(["h", "m", "s"] as const).map((part) => {
                                                             const maxHms = msToHms(editingChat.action_interval_max_ms);
