@@ -59,6 +59,7 @@ from tg_signer.config import (
     SendTextAction,
     SignChatV3,
     SignConfigV3,
+    SignConfigV4,
     SupportAction,
     UDPForward,
 )
@@ -919,10 +920,10 @@ class UserSignerWorkerContext(BaseModel):
     waiting_message: Optional[Message] = None  # 正在处理的消息
 
 
-class UserSigner(BaseUserWorker[SignConfigV3]):
+class UserSigner(BaseUserWorker[SignConfigV4]):
     _workdir = ".signer"
     _tasks_dir = "signs"
-    cfg_cls = SignConfigV3
+    cfg_cls = SignConfigV4
     context: UserSignerWorkerContext
     _follow_up_capture_seconds = 2.0
 
