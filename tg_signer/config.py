@@ -389,16 +389,25 @@ class SignChatV4(BaseJSONConfig):
     name: Optional[str] = None
     delete_after: Optional[int] = None
     actions: List[ActionT]
-    action_interval: int = 1000  # 动作间隔，单位毫秒
+    action_interval: int = 1000  # 兼容字段，毫秒
+    action_interval_mode: str = "fixed"  # fixed | random
+    action_interval_ms: Optional[int] = None
+    action_interval_min_ms: Optional[int] = None
+    action_interval_max_ms: Optional[int] = None
 
     @classmethod
     def from_v3(cls, obj: "SignChatV3") -> "SignChatV4":
+        ms = int(float(obj.action_interval) * 1000)
         return cls(
             chat_id=obj.chat_id,
             name=obj.name,
             delete_after=obj.delete_after,
             actions=obj.actions,
-            action_interval=int(float(obj.action_interval) * 1000),
+            action_interval=ms,
+            action_interval_mode="fixed",
+            action_interval_ms=ms,
+            action_interval_min_ms=ms,
+            action_interval_max_ms=ms,
         )
 
     @property

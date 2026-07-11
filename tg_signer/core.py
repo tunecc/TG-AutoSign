@@ -43,6 +43,7 @@ from pyrogram.types import (
 )
 
 from backend.core.logging import describe_exception
+from tg_signer.action_interval import resolve_action_delay_ms
 from tg_signer.config import (
     ActionT,
     BaseJSONConfig,
@@ -1476,7 +1477,16 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
             await self.wait_for(chat, action)
             self.log(f"处理完成: {readable_action(action)}")
             self.context.waiting_message = None
-            await asyncio.sleep(chat.action_interval / 1000)
+            delay_ms = resolve_action_delay_ms(chat)
+            if delay_ms > 0:
+                mode = getattr(chat, "action_interval_mode", None) or "fixed"
+                if mode == "random":
+                    lo = getattr(chat, "action_interval_min_ms", None)
+                    hi = getattr(chat, "action_interval_max_ms", None)
+                    self.log(f"动作间隔等待: {delay_ms}ms (random {lo}-{hi})")
+                else:
+                    self.log(f"动作间隔等待: {delay_ms}ms (fixed)")
+                await asyncio.sleep(delay_ms / 1000)
 
         if (
             self._message_event_callback is not None
