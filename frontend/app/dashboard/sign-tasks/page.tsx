@@ -767,7 +767,10 @@ export default function SignTasksPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className="text-xs font-mono text-main/60">{task.chats[0]?.chat_id || "-"}</span>
+                                                    <span className="text-xs font-mono text-main/60" title={(task.chats || []).map(c => c.name || c.chat_id).join(", ")}>
+                                                        {t("target_chats_count").replace("{count}", String(task.chats?.length || 0))}
+                                                        {task.chats?.length ? ` · ${task.chats[0]?.name || task.chats[0]?.chat_id}` : ""}
+                                                    </span>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <span className="text-xs font-mono text-main/70">
@@ -888,7 +891,10 @@ export default function SignTasksPage() {
                                     <div className="space-y-2 mb-3 text-xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-main/40">Chat ID</span>
-                                            <span className="font-mono text-main/70">{task.chats[0]?.chat_id || "-"}</span>
+                                            <span className="font-mono text-main/70" title={(task.chats || []).map(c => c.name || c.chat_id).join(", ")}>
+                                                {t("target_chats_count").replace("{count}", String(task.chats?.length || 0))}
+                                                {task.chats?.length ? ` · ${task.chats[0]?.name || task.chats[0]?.chat_id}` : ""}
+                                            </span>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-main/40">{language === "zh" ? "时间" : "Schedule"}</span>
