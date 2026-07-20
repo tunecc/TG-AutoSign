@@ -25,6 +25,8 @@ import {
 import {
     Plus,
     CaretLeft,
+    CaretUp,
+    CaretDown,
     Play,
     PencilSimple,
     Trash,
@@ -266,6 +268,24 @@ export default function SignTasksPage() {
         setSortKey(key);
         setSortDir("asc");
     }, [sortKey]);
+
+    const renderSortableHeader = (key: SortKey, labelZh: string, labelEn: string) => {
+        const active = sortKey === key;
+        return (
+            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">
+                <button
+                    type="button"
+                    onClick={() => handleSortClick(key)}
+                    className={`inline-flex items-center gap-1 hover:text-main transition-colors ${active ? "text-[#b57dff]" : ""}`}
+                >
+                    <span>{language === "zh" ? labelZh : labelEn}</span>
+                    {active && (sortDir === "asc"
+                        ? <CaretUp weight="bold" size={12} />
+                        : <CaretDown weight="bold" size={12} />)}
+                </button>
+            </th>
+        );
+    };
 
     // 筛选后再排序的任务列表
     const filteredTasks = useMemo(() => {
@@ -722,6 +742,29 @@ export default function SignTasksPage() {
                                     ))}
                                 </select>
                             )}
+                            <select
+                                value={sortKey}
+                                onChange={(e) => handleSortKeyChange(e.target.value as SortKey)}
+                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold hover:bg-white/10 transition-all"
+                                title={language === "zh" ? "排序字段" : "Sort by"}
+                            >
+                                <option value="account">{language === "zh" ? "账号" : "Account"}</option>
+                                <option value="schedule">{language === "zh" ? "调度时间" : "Schedule"}</option>
+                                <option value="last_run">{language === "zh" ? "最后运行" : "Last Run"}</option>
+                            </select>
+                            <button
+                                type="button"
+                                onClick={handleSortDirToggle}
+                                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:bg-white/10 transition-all inline-flex items-center gap-1"
+                                title={sortDir === "asc"
+                                    ? (language === "zh" ? "升序（点击切换为降序）" : "Ascending (click for descending)")
+                                    : (language === "zh" ? "降序（点击切换为升序）" : "Descending (click for ascending)")}
+                            >
+                                {sortDir === "asc" ? <CaretUp weight="bold" size={12} /> : <CaretDown weight="bold" size={12} />}
+                                <span>{sortDir === "asc"
+                                    ? (language === "zh" ? "升序" : "Asc")
+                                    : (language === "zh" ? "降序" : "Desc")}</span>
+                            </button>
                         </div>
                     </div>
                 )}
@@ -757,11 +800,11 @@ export default function SignTasksPage() {
                                                 </button>
                                             </th>
                                         )}
-                                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">{language === "zh" ? "账号" : "Account"}</th>
+                                        {renderSortableHeader("account", "账号", "Account")}
                                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">{language === "zh" ? "任务名" : "Task"}</th>
                                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">Chat ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">{language === "zh" ? "调度时间" : "Schedule"}</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">{language === "zh" ? "最后运行" : "Last Run"}</th>
+                                        {renderSortableHeader("schedule", "调度时间", "Schedule")}
+                                        {renderSortableHeader("last_run", "最后运行", "Last Run")}
                                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-main/60">{language === "zh" ? "状态" : "Status"}</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-main/60">{language === "zh" ? "操作" : "Actions"}</th>
                                     </tr>
