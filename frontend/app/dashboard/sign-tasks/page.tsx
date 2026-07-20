@@ -49,6 +49,12 @@ import { TaskBatchActionsBar } from "../../../components/TaskBatchActionsBar";
 import { SignTaskFlowLogLine } from "../../../components/SignTaskFlowLogLine";
 import { useLanguage } from "../../../context/LanguageContext";
 import { buildCreateTaskPath, buildEditTaskPath } from "../../../lib/task-form-nav";
+import {
+    SortKey,
+    SortDir,
+    nextSortState,
+    sortSignTasks,
+} from "../../../lib/task-list-sort";
 
 const truncateSummaryText = (text: string, limit = 200) => {
     if (text.length <= limit) return text;
@@ -139,6 +145,8 @@ export default function SignTasksPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+    const [sortKey, setSortKey] = useState<SortKey>("account");
+    const [sortDir, setSortDir] = useState<SortDir>("asc");
 
     // 批量操作状态
     const [selectionMode, setSelectionMode] = useState(false);
@@ -243,9 +251,25 @@ export default function SignTasksPage() {
         };
     }, []);
 
-    // 筛选后的任务列表
+    const handleSortClick = useCallback((clickedKey: SortKey) => {
+        const next = nextSortState(sortKey, sortDir, clickedKey);
+        setSortKey(next.sortKey);
+        setSortDir(next.sortDir);
+    }, [sortKey, sortDir]);
+
+    const handleSortDirToggle = useCallback(() => {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    }, []);
+
+    const handleSortKeyChange = useCallback((key: SortKey) => {
+        if (key === sortKey) return;
+        setSortKey(key);
+        setSortDir("asc");
+    }, [sortKey]);
+
+    // 筛选后再排序的任务列表
     const filteredTasks = useMemo(() => {
-        return tasks.filter(task => {
+        const filtered = tasks.filter(task => {
             // 账号筛选
             if (selectedAccounts.length > 0 && !selectedAccounts.includes(task.account_name)) {
                 return false;
@@ -266,7 +290,8 @@ export default function SignTasksPage() {
             }
             return true;
         });
-    }, [tasks, selectedAccounts, statusFilter, searchQuery]);
+        return sortSignTasks(filtered, sortKey, sortDir);
+    }, [tasks, selectedAccounts, statusFilter, searchQuery, sortKey, sortDir]);
 
     // 批量操作
     const getTaskId = (task: SignTask) => `${task.account_name}:${task.name}`;
