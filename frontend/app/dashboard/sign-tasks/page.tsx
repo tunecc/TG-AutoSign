@@ -129,6 +129,34 @@ const summarizeIncomingMessages = (
     return truncateSummaryText(summary);
 };
 
+const SORT_KEY_STORAGE = "tg-signpulse:task-sort-key";
+const SORT_DIR_STORAGE = "tg-signpulse:task-sort-dir";
+const STATUS_FILTER_STORAGE = "tg-signpulse:task-status-filter";
+
+const VALID_SORT_KEYS: SortKey[] = ["account", "schedule", "last_run"];
+const VALID_SORT_DIRS: SortDir[] = ["asc", "desc"];
+const VALID_STATUS_FILTERS: StatusFilter[] = ["all", "success", "failed", "not_run"];
+
+function readPersisted<T extends string>(key: string, valid: T[], fallback: T): T {
+    if (typeof window === "undefined") return fallback;
+    try {
+        const v = window.localStorage.getItem(key);
+        if (v && valid.includes(v as T)) return v as T;
+    } catch {
+        // localStorage 不可用或被禁用
+    }
+    return fallback;
+}
+
+function writePersisted(key: string, value: string): void {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.setItem(key, value);
+    } catch {
+        // 忽略写入失败
+    }
+}
+
 type ViewMode = "card" | "table";
 type StatusFilter = "all" | "success" | "failed" | "not_run";
 
@@ -146,9 +174,15 @@ export default function SignTasksPage() {
     const [viewMode, setViewMode] = useState<ViewMode>("table");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-    const [sortKey, setSortKey] = useState<SortKey>("account");
-    const [sortDir, setSortDir] = useState<SortDir>("asc");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
+        readPersisted(STATUS_FILTER_STORAGE, VALID_STATUS_FILTERS, "all")
+    );
+    const [sortKey, setSortKey] = useState<SortKey>(() =>
+        readPersisted(SORT_KEY_STORAGE, VALID_SORT_KEYS, "account")
+    );
+    const [sortDir, setSortDir] = useState<SortDir>(() =>
+        readPersisted(SORT_DIR_STORAGE, VALID_SORT_DIRS, "asc")
+    );
 
     // 批量操作状态
     const [selectionMode, setSelectionMode] = useState(false);
@@ -195,6 +229,18 @@ export default function SignTasksPage() {
         setViewMode(mode);
         localStorage.setItem("tg-signpulse:task-view-mode", mode);
     };
+
+    useEffect(() => {
+        writePersisted(SORT_KEY_STORAGE, sortKey);
+    }, [sortKey]);
+
+    useEffect(() => {
+        writePersisted(SORT_DIR_STORAGE, sortDir);
+    }, [sortDir]);
+
+    useEffect(() => {
+        writePersisted(STATUS_FILTER_STORAGE, statusFilter);
+    }, [statusFilter]);
 
     const formatErrorMessage = useCallback((key: string, err?: any) => {
         const base = tRef.current ? tRef.current(key) : key;
