@@ -2,6 +2,7 @@
 change: task-center-optimization
 design-doc: docs/superpowers/specs/2026-08-16-task-center-optimization-design.md
 base-ref: b9763346a97a4539888060b9ecd3ea1b0c9ec95d
+archived-with: 2026-08-16-task-center-optimization
 ---
 
 # 任务中心综合优化 Implementation Plan

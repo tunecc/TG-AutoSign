@@ -1,0 +1,14 @@
+{
+  "change": "task-center-optimization",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "eb01f30527f83cdd79b6dd80606e4884cec3bff85ed85b2c546533311f8d1994",
+  "files": [
+    { "path": "docs/openspec/changes/task-center-optimization/proposal.md", "sha256": "79051dc39c74b3121d0dacb468fa647f09a3d5d83d2ba3c121f28b7fa41119f6" },
+    { "path": "docs/openspec/changes/task-center-optimization/design.md", "sha256": "10fed89bb18af9b23c93e9cc0980cd929c4761ff98a0ab0ab466d4c50aa537f4" },
+    { "path": "docs/openspec/changes/task-center-optimization/tasks.md", "sha256": "29700282cb3957c879bf144ade9043ff228c5ade31c3c5f70519f046d5e8746a" },
+    { "path": "docs/openspec/changes/task-center-optimization/specs/task-center/spec.md", "sha256": "026641df43093a620a4467d4e5fe1356beeb43e7342b02143a380e26ac728779" }
+  ]
+}
