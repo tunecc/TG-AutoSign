@@ -3,6 +3,15 @@
 本文件记录当前维护分支的重要功能、修复、配置、部署与文档变更。
 This file records important feature, fix, configuration, deployment, and documentation changes for the current maintained branch.
 
+## 2026-08-16
+
+- 修复 / Fixed: 任务中心删除签到任务时同步清理其运行历史文件，并收敛 `_get_last_run_info` 回退逻辑——新建同名任务不再显示旧任务的最后运行时间，跨账号同名任务互不串读历史 / Clean up a sign task's run-history files on delete and converge `_get_last_run_info` fallback so newly created same-name tasks no longer show a stale last-run time and same-name tasks across accounts no longer bleed history.
+- 新增 / Added: 任务列表失败任务支持点击行内展开，显示失败时间、失败原因（`last_run.message`）与查看历史日志入口；成功/未运行状态不触发展开，单展开模式 / Add an inline expand on failed tasks in the task list showing failure time, reason (`last_run.message`), and a history-log shortcut; success/not-run states do not expand, single-expand mode.
+- 修复 / Fixed: 批量添加计划后编辑时间重复同名任务时不再出现加载任务失败；编辑页加载失败区分 404 与其他错误，任务不存在时给出明确提示并返回列表 / Editing time-duplicate same-name tasks created via batch scheduling no longer fails to load; the edit page distinguishes 404 from other load errors and returns to the list with a clear "task not found" message.
+- 新增 / Added: 任务列表排序字段、升降序与状态筛选持久化到浏览器本地存储，刷新页面后恢复；搜索词不持久化 / Persist the task list sort key, sort direction, and status filter to browser local storage and restore them after refresh; the search query is not persisted.
+- 变更 / Changed: 任务列表顶部搜索与筛选状态栏重构为单行紧凑布局，统一控件高度与间距，窄屏自适应换行，保持玻璃面板视觉风格 / Refactor the task list search and status filter bar into a single-row compact layout with unified control height and spacing, responsive wrapping on narrow screens, and the existing glass-panel visual style.
+- 新增 / Added: 任务配置模板——可将任务配置（目标会话列表、调度模式与时间、随机延迟、动作间隔）保存为命名模板，在创建页一键应用，应用后任务仍可手动编辑再提交，不直接创建任务；支持模板列表与删除，删除模板不影响已建任务 / Add task configuration templates that save chats, schedule mode/times, random delay, and action interval as a named template, apply it with one click on the create page (the task remains editable before submitting and is not auto-created), and support listing and deleting templates without affecting existing tasks.
+
 ## 2026-06-12
 
 - 修复 / Fixed: 登录页改为标准登录表单语义，用户名、密码与 TOTP 字段分别使用 `username`、`current-password`、`one-time-code` 自动填充标记，并在提交时直接读取表单 DOM 值，提升 Bitwarden 与浏览器密码管理器自动填充兼容性 / Use standard sign-in form semantics for the login page with `username`, `current-password`, and `one-time-code` autocomplete hints, and read submitted DOM form values directly to improve Bitwarden and browser password-manager autofill compatibility.
