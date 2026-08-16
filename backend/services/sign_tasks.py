@@ -600,12 +600,15 @@ class SignTaskService:
     ) -> Optional[Dict[str, Any]]:
         """
         获取任务的最后执行信息
+        - account_name 非空：仅读取 {account}__{task}.json，并校验最近一条的 account_name 一致
+        - account_name 为空：回退 legacy 单文件 {task}.json（真正旧版兼容）
         """
         history_file = self._history_file_path(task_dir.name, account_name)
-        legacy_file = self.run_history_dir / f"{task_dir.name}.json"
+        legacy_file = self.run_history_dir / f"{self._safe_history_key(task_dir.name)}.json"
 
         if not history_file.exists():
-            if account_name and legacy_file.exists():
+            # 仅在无 account_name 时回退 legacy 单文件（真正旧版兼容场景）
+            if not account_name and legacy_file.exists():
                 history_file = legacy_file
             else:
                 return None
@@ -613,11 +616,17 @@ class SignTaskService:
         try:
             with open(history_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
+                entry = None
                 if isinstance(data, list) and len(data) > 0:
-                    return data[0]  # 最近的一条
+                    entry = data[0]
                 elif isinstance(data, dict):
-                    return data
-                return None
+                    entry = data
+                if entry is None:
+                    return None
+                # account_name 非空时校验条目归属，避免跨账号串读
+                if account_name and entry.get("account_name") and entry.get("account_name") != account_name:
+                    return None
+                return entry
         except Exception:
             return None
 
