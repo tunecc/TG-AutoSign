@@ -758,21 +758,21 @@ export default function SignTasksPage() {
                 {!selectionMode && tasks.length > 0 && (
                     <div className="glass-panel p-3 mb-6 flex flex-wrap items-center gap-3">
                         <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                            <MagnifyingGlass weight="bold" size={16} className="text-main/40" />
+                            <MagnifyingGlass weight="bold" size={16} className="text-main/40 shrink-0" />
                             <input
                                 type="text"
                                 placeholder={language === "zh" ? "搜索任务、账号、Chat ID..." : "Search tasks, accounts, chat ID..."}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-main/30"
+                                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-main/30 min-w-0"
                             />
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <Funnel weight="bold" size={14} className="text-main/40" />
+                            <Funnel weight="bold" size={14} className="text-main/40 shrink-0" />
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold hover:bg-white/10 transition-all"
+                                className="bg-white/5 border border-white/10 rounded-lg h-9 px-3 text-xs font-bold hover:bg-white/10 transition-all"
                             >
                                 <option value="all">{language === "zh" ? "全部状态" : "All Status"}</option>
                                 <option value="success">{language === "zh" ? "成功" : "Success"}</option>
@@ -783,7 +783,7 @@ export default function SignTasksPage() {
                                 <select
                                     value={selectedAccounts.length === 1 ? selectedAccounts[0] : ""}
                                     onChange={(e) => setSelectedAccounts(e.target.value ? [e.target.value] : [])}
-                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold hover:bg-white/10 transition-all"
+                                    className="bg-white/5 border border-white/10 rounded-lg h-9 px-3 text-xs font-bold hover:bg-white/10 transition-all"
                                 >
                                     <option value="">{language === "zh" ? "全部账号" : "All Accounts"}</option>
                                     {accounts.map(acc => (
@@ -794,7 +794,7 @@ export default function SignTasksPage() {
                             <select
                                 value={sortKey}
                                 onChange={(e) => handleSortKeyChange(e.target.value as SortKey)}
-                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold hover:bg-white/10 transition-all"
+                                className="bg-white/5 border border-white/10 rounded-lg h-9 px-3 text-xs font-bold hover:bg-white/10 transition-all"
                                 title={language === "zh" ? "排序字段" : "Sort by"}
                             >
                                 <option value="account">{language === "zh" ? "账号" : "Account"}</option>
@@ -804,7 +804,7 @@ export default function SignTasksPage() {
                             <button
                                 type="button"
                                 onClick={handleSortDirToggle}
-                                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:bg-white/10 transition-all inline-flex items-center gap-1"
+                                className="bg-white/5 border border-white/10 rounded-lg h-9 px-2.5 text-xs font-bold hover:bg-white/10 transition-all inline-flex items-center gap-1"
                                 title={sortDir === "asc"
                                     ? (language === "zh" ? "升序（点击切换为降序）" : "Ascending (click for descending)")
                                     : (language === "zh" ? "降序（点击切换为升序）" : "Descending (click for ascending)")}
