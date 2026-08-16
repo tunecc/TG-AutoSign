@@ -149,7 +149,8 @@ function EditSignTaskContent() {
             loadChats(tokenStr, accountName);
         } catch (err: any) {
             if (handleAccountSessionInvalid(err)) return;
-            addToast(formatErrorMessage("task_load_failed", err), "error");
+            const key = err?.status === 404 ? "task_not_found" : "task_load_failed";
+            addToast(formatErrorMessage(key, err), "error");
             setTimeout(() => {
                 router.replace(resolveTaskFormReturnPath(fromParam, accountName));
             }, 600);
