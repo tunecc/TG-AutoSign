@@ -8,9 +8,13 @@ import {
     listAccounts,
     getAccountChats,
     searchAccountChats,
+    listSignTaskTemplates,
+    saveSignTaskTemplate,
+    deleteSignTaskTemplate,
     AccountInfo,
     ChatInfo,
     SignTaskChat,
+    SignTaskTemplate,
 } from "../../../../lib/api";
 import {
     normalizeChatInterval,
@@ -25,6 +29,7 @@ import {
     Clock,
     Spinner,
     Lightning,
+    Trash,
 } from "@phosphor-icons/react";
 
 import { ThemeLanguageToggle } from "../../../../components/ThemeLanguageToggle";
@@ -72,6 +77,18 @@ const fixedTimeToCron = (value: string) => {
     return `0 ${minute} ${hour} * * *`;
 };
 
+function cronToFixedTime(cron: string): string {
+    const parts = (cron || "").trim().split(/\s+/);
+    if (parts.length >= 3) {
+        const minute = Number(parts[1]);
+        const hour = Number(parts[2]);
+        if (Number.isFinite(minute) && Number.isFinite(hour)) {
+            return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+        }
+    }
+    return "06:00";
+}
+
 function CreateSignTaskContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -107,6 +124,12 @@ function CreateSignTaskContent() {
 
     // 当前编辑的 Chat
     const [editingChat, setEditingChat] = useState<EditingChatDraft | null>(null);
+
+    // 任务模板
+    const [templates, setTemplates] = useState<SignTaskTemplate[]>([]);
+    const [templateName, setTemplateName] = useState("");
+    const [applyTemplateName, setApplyTemplateName] = useState("");
+    const [templateSaving, setTemplateSaving] = useState(false);
 
     const formatErrorMessage = useCallback((key: string, err?: any) => {
         const base = t(key);
@@ -260,6 +283,79 @@ function CreateSignTaskContent() {
 
     const handleAddChat = () => {
         setEditingChat(createEmptyEditingChat());
+    };
+
+    const loadTemplates = useCallback(async () => {
+        if (!token) return;
+        try {
+            const data = await listSignTaskTemplates(token);
+            setTemplates(data);
+        } catch (err: any) {
+            // 模板加载失败不阻塞主流程
+        }
+    }, [token]);
+
+    useEffect(() => {
+        loadTemplates();
+    }, [loadTemplates]);
+
+    const handleSaveTemplate = async () => {
+        if (!token) return;
+        const name = templateName.trim();
+        if (!name) {
+            addToast(t("task_template_name_required"), "error");
+            return;
+        }
+        try {
+            setTemplateSaving(true);
+            const normalizedChats = chats.map((c) => normalizeChatInterval(c));
+            await saveSignTaskTemplate(token, {
+                name,
+                chats: normalizedChats,
+                execution_mode: executionMode,
+                sign_at: fixedTimeToCron(signAt),
+                range_start: rangeStart,
+                range_end: rangeEnd,
+                random_seconds: randomSeconds,
+                sign_interval: signInterval,
+            });
+            addToast(t("task_template_saved"), "success");
+            setTemplateName("");
+            await loadTemplates();
+        } catch (err: any) {
+            addToast(formatErrorMessage("create_failed", err), "error");
+        } finally {
+            setTemplateSaving(false);
+        }
+    };
+
+    const handleApplyTemplate = async (name: string) => {
+        const template = templates.find((tpl) => tpl.name === name);
+        if (!template) return;
+        setApplyTemplateName(name);
+        // 应用模板覆盖 chats + 调度 + 延迟 + 间隔；保留 selectedAccount
+        setExecutionMode(template.execution_mode === "range" ? "range" : "fixed");
+        if (template.execution_mode === "range") {
+            setRangeStart(template.range_start || "09:00");
+            setRangeEnd(template.range_end || "18:00");
+        }
+        setSignAt(cronToFixedTime(template.sign_at || ""));
+        setRandomSeconds(template.random_seconds ?? 0);
+        setSignInterval(template.sign_interval ?? 1);
+        setChats((template.chats || []).map((c) => normalizeChatInterval(c)));
+        addToast(t("task_template_applied"), "success");
+    };
+
+    const handleDeleteTemplate = async (name: string) => {
+        if (!token) return;
+        try {
+            await deleteSignTaskTemplate(token, name);
+            addToast(t("task_template_deleted"), "success");
+            if (applyTemplateName === name) setApplyTemplateName("");
+            await loadTemplates();
+        } catch (err: any) {
+            addToast(formatErrorMessage("create_failed", err), "error");
+        }
     };
 
     const handleRefreshChats = async () => {
@@ -666,6 +762,64 @@ function CreateSignTaskContent() {
                                     </tbody>
                                 </table>
                             </div>
+                        )}
+                    </section>
+
+                    {/* 任务模板 */}
+                    <section className="glass-panel p-6 space-y-4">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-[#8a3ffc]/10 rounded-lg text-[#b57dff]">
+                                <Lightning weight="fill" size={18} />
+                            </div>
+                            <h2 className="text-lg font-bold">{t("task_template_section")}</h2>
+                        </div>
+
+                        {/* 保存为模板 */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <input
+                                className="!mb-0 flex-1 min-w-[160px]"
+                                value={templateName}
+                                onChange={(e) => setTemplateName(e.target.value)}
+                                placeholder={t("task_template_name_placeholder")}
+                            />
+                            <button
+                                onClick={handleSaveTemplate}
+                                disabled={templateSaving || chats.length === 0}
+                                className="btn-secondary"
+                                title={t("task_template_save")}
+                            >
+                                {templateSaving ? <Spinner className="animate-spin" weight="bold" /> : t("task_template_save")}
+                            </button>
+                        </div>
+
+                        {/* 应用 / 删除模板 */}
+                        {templates.length > 0 ? (
+                            <div className="space-y-2">
+                                <p className="text-xs text-main/40">{t("task_template_apply_hint")}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <select
+                                        className="!mb-0 flex-1 min-w-[160px]"
+                                        value={applyTemplateName}
+                                        onChange={(e) => handleApplyTemplate(e.target.value)}
+                                    >
+                                        <option value="">{t("task_template_empty")}</option>
+                                        {templates.map((tpl) => (
+                                            <option key={tpl.name} value={tpl.name}>{tpl.name}</option>
+                                        ))}
+                                    </select>
+                                    {applyTemplateName && (
+                                        <button
+                                            onClick={() => handleDeleteTemplate(applyTemplateName)}
+                                            className="action-btn !h-9 status-action-danger"
+                                            title={t("task_template_delete")}
+                                        >
+                                            <Trash weight="bold" size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-main/40">{t("task_template_empty")}</p>
                         )}
                     </section>
 
