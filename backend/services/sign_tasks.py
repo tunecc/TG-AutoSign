@@ -1131,6 +1131,17 @@ class SignTaskService:
             # Invalidate cache
             self._tasks_cache = None
 
+            # best-effort 清理 history 文件，失败不阻断删除
+            for cleanup_path in (
+                self._history_file_path(task_name, real_account_name or ""),
+                self.run_history_dir / f"{self._safe_history_key(task_name)}.json",
+            ):
+                try:
+                    if cleanup_path.exists():
+                        cleanup_path.unlink()
+                except Exception as e:
+                    logger.warning("清理 history 文件失败: %s, 错误: %s", cleanup_path, e)
+
             if real_account_name:
                 try:
                     from backend.scheduler import remove_sign_task_job
