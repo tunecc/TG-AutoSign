@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getToken } from "../../../lib/auth";
@@ -153,6 +153,9 @@ export default function SignTasksPage() {
     // 批量操作状态
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+
+    // 失败任务行内展开状态
+    const [failedDetailTaskId, setFailedDetailTaskId] = useState<string | null>(null);
 
     // 运行监控状态
     const [runningTask, setRunningTask] = useState<{ name: string; accountName: string } | null>(null);
@@ -814,7 +817,8 @@ export default function SignTasksPage() {
                                         const taskId = getTaskId(task);
                                         const isSelected = selectedTasks.has(taskId);
                                         return (
-                                            <tr key={taskId} className={`hover:bg-white/5 transition-colors ${isSelected ? 'bg-[#8a3ffc]/10' : ''}`}>
+                                            <Fragment key={taskId}>
+                                            <tr className={`hover:bg-white/5 transition-colors ${isSelected ? 'bg-[#8a3ffc]/10' : ''}`}>
                                                 {selectionMode && (
                                                     <td className="px-4 py-3">
                                                         <button onClick={() => toggleTaskSelection(task)} className="action-btn !w-6 !h-6">
@@ -871,10 +875,19 @@ export default function SignTasksPage() {
                                                                     <span className="text-xs font-bold text-green-400">{t("success")}</span>
                                                                 </>
                                                             ) : (
-                                                                <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setFailedDetailTaskId(
+                                                                            failedDetailTaskId === taskId ? null : taskId
+                                                                        )
+                                                                    }
+                                                                    className="flex items-center gap-2 hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
+                                                                    title={t("failed_reason")}
+                                                                >
                                                                     <div className="w-2 h-2 rounded-full bg-red-500 shrink-0"></div>
                                                                     <span className="text-xs font-bold text-red-400">{t("failure")}</span>
-                                                                </>
+                                                                </button>
                                                             )
                                                         ) : (
                                                             <>
@@ -926,6 +939,33 @@ export default function SignTasksPage() {
                                                     </div>
                                                 </td>
                                             </tr>
+                                            {failedDetailTaskId === taskId && task.last_run && !task.last_run.success && (
+                                                <tr className="bg-red-500/5">
+                                                    <td colSpan={selectionMode ? 8 : 7} className="px-4 py-3">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-[10px] uppercase tracking-wider text-main/40 mb-1">{t("failed_at")}</div>
+                                                                <div className="text-xs font-mono text-main/70 mb-2">
+                                                                    {new Date(task.last_run.time).toLocaleString(language === "zh" ? 'zh-CN' : 'en-US')}
+                                                                </div>
+                                                                <div className="text-xs text-red-300 break-all">
+                                                                    {task.last_run.message || t("no_failed_detail")}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleShowTaskHistory(task)}
+                                                                disabled={loading}
+                                                                className="action-btn !h-7 !px-3 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10 shrink-0"
+                                                                title={t("view_history_logs")}
+                                                            >
+                                                                <ListDashes weight="bold" size={12} />
+                                                                <span className="text-xs ml-1">{t("view_history_logs")}</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            </Fragment>
                                         );
                                     })}
                                 </tbody>
@@ -987,10 +1027,19 @@ export default function SignTasksPage() {
                                                             <span className="font-bold text-green-400">{t("success")}</span>
                                                         </>
                                                     ) : (
-                                                        <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setFailedDetailTaskId(
+                                                                    failedDetailTaskId === taskId ? null : taskId
+                                                                )
+                                                            }
+                                                            className="flex items-center gap-1.5 hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
+                                                            title={t("failed_reason")}
+                                                        >
                                                             <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
                                                             <span className="font-bold text-red-400">{t("failure")}</span>
-                                                        </>
+                                                        </button>
                                                     )
                                                 ) : (
                                                     <>
@@ -1011,6 +1060,26 @@ export default function SignTasksPage() {
                                                         minute: '2-digit'
                                                     })}
                                                 </span>
+                                            </div>
+                                        )}
+                                        {failedDetailTaskId === taskId && task.last_run && !task.last_run.success && (
+                                            <div className="bg-red-500/5 rounded-lg p-2 space-y-1">
+                                                <div className="text-[10px] uppercase tracking-wider text-main/40">{t("failed_at")}</div>
+                                                <div className="text-main/60 text-[10px] font-mono">
+                                                    {new Date(task.last_run.time).toLocaleString(language === "zh" ? 'zh-CN' : 'en-US')}
+                                                </div>
+                                                <div className="text-red-300 break-all text-[11px]">
+                                                    {task.last_run.message || t("no_failed_detail")}
+                                                </div>
+                                                <button
+                                                    onClick={() => handleShowTaskHistory(task)}
+                                                    disabled={loading}
+                                                    className="action-btn !h-6 !px-2 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10"
+                                                    title={t("view_history_logs")}
+                                                >
+                                                    <ListDashes weight="bold" size={11} />
+                                                    <span className="text-[10px] ml-1">{t("view_history_logs")}</span>
+                                                </button>
                                             </div>
                                         )}
                                     </div>

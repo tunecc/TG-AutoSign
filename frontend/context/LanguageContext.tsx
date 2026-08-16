@@ -405,7 +405,11 @@ const translations: Translations = {
         "switch_to_english": "切换到英文",
         "switch_to_chinese": "切换到中文",
         "switch_to_light": "切换至日间模式",
-        "switch_to_dark": "切换至夜间模式"
+        "switch_to_dark": "切换至夜间模式",
+        "failed_reason": "失败原因",
+        "view_history_logs": "查看历史日志",
+        "no_failed_detail": "无失败详情",
+        "failed_at": "失败时间"
     },
     en: {
         "login": "Login",
@@ -795,7 +799,11 @@ const translations: Translations = {
         "switch_to_english": "Switch to English",
         "switch_to_chinese": "Switch to Chinese",
         "switch_to_light": "Switch to Light Mode",
-        "switch_to_dark": "Switch to Dark Mode"
+        "switch_to_dark": "Switch to Dark Mode",
+        "failed_reason": "Failure Reason",
+        "view_history_logs": "View History Logs",
+        "no_failed_detail": "No failure detail",
+        "failed_at": "Failed At"
     }
 };
 
