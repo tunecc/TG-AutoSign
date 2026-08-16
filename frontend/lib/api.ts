@@ -1012,3 +1012,45 @@ export const getSignTaskHistory = (
     token
   );
 };
+
+// ============ 任务配置模板 ============
+
+export interface SignTaskTemplate {
+  name: string;
+  chats: SignTaskChat[];
+  execution_mode: "fixed" | "range";
+  sign_at: string;
+  range_start: string;
+  range_end: string;
+  random_seconds: number;
+  sign_interval: number;
+  updated_at?: string;
+}
+
+export interface SaveSignTaskTemplateRequest {
+  name: string;
+  chats: SignTaskChat[];
+  execution_mode?: "fixed" | "range";
+  sign_at?: string;
+  range_start?: string;
+  range_end?: string;
+  random_seconds?: number;
+  sign_interval?: number;
+}
+
+export const listSignTaskTemplates = (token: string): Promise<SignTaskTemplate[]> =>
+  request<SignTaskTemplate[]>("/sign-task-templates", {}, token);
+
+export const saveSignTaskTemplate = (
+  token: string,
+  data: SaveSignTaskTemplateRequest
+): Promise<SignTaskTemplate> =>
+  request<SignTaskTemplate>("/sign-task-templates", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }, token);
+
+export const deleteSignTaskTemplate = (token: string, name: string): Promise<{ ok: boolean }> =>
+  request<{ ok: boolean }>(`/sign-task-templates/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  }, token);
