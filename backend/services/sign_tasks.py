@@ -36,6 +36,7 @@ from backend.utils.tg_session import (
     load_session_string_file,
 )
 from tg_signer.core import UserSigner, get_client
+from tg_signer.session_lock import session_file_lock_for_client
 
 settings = get_settings()
 logger = logging.getLogger("backend.sign_tasks")
@@ -1348,7 +1349,9 @@ class SignTaskService:
                 # 使用上下文管理器处理生命周期和锁
                 async with account_lock:
                     async with get_global_semaphore():
-                        async with active_client:
+                        async with session_file_lock_for_client(
+                            active_client, session_dir, account_name
+                        ), active_client:
                             # 尝试获取用户信息，如果失败说明 session 无效
                             await active_client.get_me()
 
@@ -1707,7 +1710,11 @@ class SignTaskService:
                             await signer.run_once(num_of_dialogs=20)
                             break
                         except Exception as e:
-                            if "database is locked" in str(e).lower():
+                            err_text = str(e).lower()
+                            if (
+                                "database is locked" in err_text
+                                or "等待会话文件锁超时" in err_text
+                            ):
                                 if attempt < max_retries - 1:
                                     delay = (attempt + 1) * 3
                                     self._active_logs[task_key].append(

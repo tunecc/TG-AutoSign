@@ -67,6 +67,7 @@ from tg_signer.config import (
 from .ai_tools import AITools, OpenAIConfigManager
 from .message_utils import message_sender_label
 from .notification.server_chan import sc_send
+from .session_lock import session_file_lock_for_client
 from .utils import UserInput, print_to_user
 
 # Monkeypatch sqlite3.connect to increase default timeout
@@ -613,6 +614,16 @@ class BaseUserWorker(Generic[ConfigT]):
             run(coroutine)
         else:
             self.app.run()
+
+    def _session_file_lock(self):
+        """按当前客户端会话类型返回跨进程文件锁。
+
+        文件会话的 `.session` 是 SQLite 数据库，后端进程与 CLI 子进程并发
+        打开同一文件会触发 "database is locked"，需要在连接期间互斥。
+        """
+        return session_file_lock_for_client(
+            self.app, self._session_dir, self._account
+        )
 
     @property
     def workdir(self) -> pathlib.Path:
@@ -1520,8 +1531,9 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
     async def normal_run(
         self, num_of_dialogs=20, only_once: bool = False, force_rerun: bool = False
     ):
-        if self.user is None:
-            await self.login(num_of_dialogs, print_chat=True)
+        async with self._session_file_lock():
+            if self.user is None:
+                await self.login(num_of_dialogs, print_chat=True)
 
         config = self.load_config(self.cfg_cls)
         if config.requires_ai:
@@ -1580,18 +1592,19 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
                     EditedMessageHandler(self.on_edited_message, filters.chat(chat_ids))
                 )
             try:
-                async with self.app:
-                    now = get_now()
-                    self.log(f"当前时间: {now}")
-                    now_date_str = str(now.date())
-                    self.context = self.ensure_ctx()
-                    if need_sign(now_date_str):
-                        if only_once and config.random_seconds > 0:
-                            delay = random.randint(0, int(config.random_seconds))
-                            if delay > 0:
-                                self.log(f"单次执行随机延迟: {delay} 秒")
-                                await asyncio.sleep(delay)
-                        await sign_once()
+                async with self._session_file_lock():
+                    async with self.app:
+                        now = get_now()
+                        self.log(f"当前时间: {now}")
+                        now_date_str = str(now.date())
+                        self.context = self.ensure_ctx()
+                        if need_sign(now_date_str):
+                            if only_once and config.random_seconds > 0:
+                                delay = random.randint(0, int(config.random_seconds))
+                                if delay > 0:
+                                    self.log(f"单次执行随机延迟: {delay} 秒")
+                                    await asyncio.sleep(delay)
+                            await sign_once()
 
             except (OSError, errors.Unauthorized) as e:
                 logger.exception("签到任务运行异常，30 秒后重试: %s", describe_exception(e))
@@ -1619,8 +1632,10 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
             except Exception:
                 pass
 
-    async def run_once(self, num_of_dialogs):
-        return await self.run(num_of_dialogs, only_once=True, force_rerun=True)
+    async def run_once(self, num_of_dialogs, force_rerun: bool = True):
+        return await self.run(
+            num_of_dialogs, only_once=True, force_rerun=force_rerun
+        )
 
     async def send_text(
         self, chat_id: int, text: str, delete_after: int = None, **kwargs

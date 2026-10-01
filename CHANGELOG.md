@@ -3,6 +3,11 @@
 本文件记录当前维护分支的重要功能、修复、配置、部署与文档变更。
 This file records important feature, fix, configuration, deployment, and documentation changes for the current maintained branch.
 
+## 2026-10-01
+
+- 修复 / Fixed: 修复定时签到任务天天报 "database is locked" 失败的问题。根因是"普通任务"通过 CLI 子进程执行 `tg-signer run`——那是常驻 cron 守护循环，子进程永远不会退出，会在每日自身 cron 时刻重新连上并占用同账号的 `.session` SQLite 文件，与后端进程内的签到任务发生跨进程 SQLite 写锁冲突（进程内的账号锁与客户端共享池对子进程无效）。现将普通任务改为 `tg-signer run_once --no-force` 一次性执行：触发一次执行一次后立即退出，是否执行仍由任务配置的调度判断（今日已执行则跳过），与原守护进程行为一致 / Fix daily "database is locked" failures of scheduled sign tasks. The root cause: normal tasks ran `tg-signer run` in a CLI subprocess — a perpetual cron daemon that never exits, reconnects at its own cron time each day and holds the same account's `.session` SQLite file while the backend's in-process sign task opens it, causing cross-process SQLite write-lock contention (in-process account locks and the shared client pool cannot protect across processes). Normal tasks now run `tg-signer run_once --no-force`: one-shot execution that exits immediately, keeping the old daemon semantics of skipping runs already executed today per the task's own schedule.
+- 新增 / Added: 跨进程会话文件锁 `tg_signer/session_lock.py`——文件会话在连接 Telegram 期间对 `<account>.session.lock` 加 `flock` 互斥（签到执行、登录探测、刷新会话列表路径均已接入），进程内复用既有账号锁不变；flock 随进程退出自动释放，无残留死锁风险。锁等待超时默认 120 秒，可通过 `TG_SESSION_FILE_LOCK_TIMEOUT` 调整（<=0 表示无限等待）；后端签到任务在等待文件锁超时后沿用既有的 3 次重试机制。in-memory / session_string 会话不受影响 / Add a cross-process session file lock (`tg_signer/session_lock.py`): file-mode sessions hold an exclusive `flock` on `<account>.session.lock` while connected, wired into sign-task execution, login probing, and chat-list refresh; in-process behavior is unchanged. The lock releases automatically on process exit. Wait timeout defaults to 120 seconds and is configurable via `TG_SESSION_FILE_LOCK_TIMEOUT` (<=0 means wait forever); sign tasks retry through the existing 3-attempt loop when the lock wait times out. In-memory / session_string sessions are unaffected.
+
 ## 2026-08-16
 
 - 修复 / Fixed: 任务中心删除签到任务时同步清理其运行历史文件，并收敛 `_get_last_run_info` 回退逻辑——新建同名任务不再显示旧任务的最后运行时间，跨账号同名任务互不串读历史 / Clean up a sign task's run-history files on delete and converge `_get_last_run_info` fallback so newly created same-name tasks no longer show a stale last-run time and same-name tasks across accounts no longer bleed history.

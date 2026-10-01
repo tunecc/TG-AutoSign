@@ -245,10 +245,17 @@ def run(obj, task_names, num_of_dialogs):
     type=int,
     help="获取最近N个对话, 请确保想要签到的对话在最近N个对话内",
 )
+@click.option(
+    "--force/--no-force",
+    "force_rerun",
+    default=True,
+    show_default=True,
+    help="为真时忽略今日已执行记录强制重跑；为假时按任务配置的调度判断是否需要执行",
+)
 @click.pass_obj
-def run_once(obj, task_name, num_of_dialogs):
+def run_once(obj, task_name, num_of_dialogs, force_rerun):
     signer = get_signer(task_name, obj)
-    signer.app_run(signer.run_once(num_of_dialogs))
+    signer.app_run(signer.run_once(num_of_dialogs, force_rerun=force_rerun))
 
 
 @tg_signer.command(help='发送一次文本消息, 请确保当前会话已经"见过"该`chat_id`')

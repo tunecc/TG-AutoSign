@@ -94,6 +94,9 @@ services:
       # Session 存储模式：file 或 string
       # - TG_SESSION_MODE=file
 
+      # 跨进程会话文件锁等待超时秒数；<=0 表示无限等待
+      # - TG_SESSION_FILE_LOCK_TIMEOUT=120
+
       # 关闭更新接收；TG_NO_UPDATES 为兼容别名
       # - TG_SESSION_NO_UPDATES=0
       # - TG_NO_UPDATES=0

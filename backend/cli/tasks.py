@@ -20,6 +20,21 @@ def _base_args(account_name: str) -> list[str]:
     ]
 
 
+def _build_run_task_args(
+    account_name: str, task_name: str, num_of_dialogs: int
+) -> list[str]:
+    # 必须用 run_once 而不是 run：run 是常驻 cron 守护循环，子进程永远不会退出，
+    # 会长期占用账号 session 文件，导致签到任务报 "database is locked"。
+    # --no-force 与旧守护进程行为一致：是否执行由任务配置自身的调度判断。
+    return _base_args(account_name) + [
+        "run_once",
+        task_name,
+        "--num-of-dialogs",
+        str(num_of_dialogs),
+        "--no-force",
+    ]
+
+
 async def async_run_task_cli(
     account_name: str,
     task_name: str,
@@ -30,12 +45,7 @@ async def async_run_task_cli(
     Asynchronously run a tg-signer sign task using CLI.
     Returns (returncode, stdout, stderr)
     """
-    args = _base_args(account_name) + [
-        "run",
-        task_name,
-        "--num-of-dialogs",
-        str(num_of_dialogs),
-    ]
+    args = _build_run_task_args(account_name, task_name, num_of_dialogs)
 
     process = await asyncio.create_subprocess_exec(
         *args,
