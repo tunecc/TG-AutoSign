@@ -160,3 +160,8 @@ docs/plans
 .vibeskills
 docs
 create_test_data.py
+# >>> Comet managed project state >>>
+!/.comet/
+/.comet/*
+!/.comet/config.yaml
+# <<< Comet managed project state <<<
