@@ -1582,6 +1582,11 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
                 return False
             return True
 
+        # 一次性执行没有外部调度循环兜底：OSError（Python 3.11+ 起包含 TimeoutError，
+        # 即 "Request timed out"）与 Unauthorized 的重试必须有上限，否则 run_once
+        # 永不返回，调用方的账号锁被无限占用，同账号后续任务全部超时失败。
+        only_once_max_attempts = 3
+        consecutive_failures = 0
         while True:
             if need_update_handlers and message_handler_ref is None:
                 self.log(f"正在为以下会话添加消息处理器: {chat_ids}")
@@ -1607,9 +1612,14 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
                             await sign_once()
 
             except (OSError, errors.Unauthorized) as e:
+                consecutive_failures += 1
+                if only_once and consecutive_failures >= only_once_max_attempts:
+                    raise
                 logger.exception("签到任务运行异常，30 秒后重试: %s", describe_exception(e))
                 await asyncio.sleep(30)
                 continue
+
+            consecutive_failures = 0
 
             if only_once:
                 break
