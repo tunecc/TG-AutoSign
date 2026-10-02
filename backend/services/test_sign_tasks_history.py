@@ -235,3 +235,45 @@ def test_cleanup_falls_back_to_mtime_for_corrupt_file(tmp_path, monkeypatch):
 
     assert not old_file.exists()
     assert fresh_file.exists()
+
+
+# ---------- update_task 重命名迁移历史 ----------
+
+
+def test_update_task_migrates_history_on_rename(tmp_path, monkeypatch):
+    """重命名任务时账号作用域 history 文件跟随迁移，last_run 可恢复。"""
+    service = _make_service(tmp_path, monkeypatch)
+    _create_task(service, "accA", "taskT")
+    history_file = _write_history(service, "accA", "taskT")
+
+    updated = service.update_task("taskT", account_name="accA", new_task_name="taskNew")
+
+    assert updated["name"] == "taskNew"
+    new_history = service._history_file_path("taskNew", "accA")
+    assert new_history.exists()
+    assert not history_file.exists()
+    data = json.loads(new_history.read_text(encoding="utf-8"))
+    assert data[0]["message"] == "ok"
+
+    tasks = service.list_tasks(force_refresh=True)
+    task = next(t for t in tasks if t["name"] == "taskNew")
+    assert task["last_run"] is not None
+
+
+def test_update_task_migrates_legacy_history_on_rename(tmp_path, monkeypatch):
+    """重命名任务时 legacy history 文件迁移到账号作用域新名。"""
+    service = _make_service(tmp_path, monkeypatch)
+    _create_task(service, "accA", "taskT")
+    legacy_file = service.run_history_dir / f"{service._safe_history_key('taskT')}.json"
+    legacy_file.write_text(
+        json.dumps([{"time": "2026-10-01T00:00:00", "success": True, "message": "legacy-ok"}]),
+        encoding="utf-8",
+    )
+
+    service.update_task("taskT", account_name="accA", new_task_name="taskNew")
+
+    assert not legacy_file.exists()
+    migrated = service._history_file_path("taskNew", "accA")
+    assert migrated.exists()
+    data = json.loads(migrated.read_text(encoding="utf-8"))
+    assert data[0]["message"] == "legacy-ok"

@@ -890,7 +890,10 @@ class SignTaskService:
                 "range_start": config.get("range_start", ""),
                 "range_end": config.get("range_end", ""),
             }
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "任务配置解析失败（任务将从列表隐藏）: 路径=%s, 错误=%s", config_file, e
+            )
             return None
 
     def get_task(
@@ -922,23 +925,26 @@ class SignTaskService:
         try:
             with open(config_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
-
-            chats = _normalize_task_chats(config.get("chats"), config.get("_version"))
-
-            return {
-                "name": task_name,
-                "account_name": config.get("account_name", ""),
-                "sign_at": config.get("sign_at", ""),
-                "random_seconds": config.get("random_seconds", 0),
-                "sign_interval": config.get("sign_interval", 1),
-                "chats": chats,
-                "enabled": True,
-                "execution_mode": config.get("execution_mode", "fixed"),
-                "range_start": config.get("range_start", ""),
-                "range_end": config.get("range_end", ""),
-            }
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "任务配置解析失败（任务将从列表隐藏）: 路径=%s, 错误=%s", config_file, e
+            )
             return None
+
+        chats = _normalize_task_chats(config.get("chats"), config.get("_version"))
+
+        return {
+            "name": task_name,
+            "account_name": config.get("account_name", ""),
+            "sign_at": config.get("sign_at", ""),
+            "random_seconds": config.get("random_seconds", 0),
+            "sign_interval": config.get("sign_interval", 1),
+            "chats": chats,
+            "enabled": True,
+            "execution_mode": config.get("execution_mode", "fixed"),
+            "range_start": config.get("range_start", ""),
+            "range_end": config.get("range_end", ""),
+        }
 
     def create_task(
         self,
@@ -1117,6 +1123,31 @@ class SignTaskService:
         # 执行目录重命名
         if target_dir is not None:
             task_dir.rename(target_dir)
+            # 同步迁移运行历史（以任务名为键），避免重命名后历史清空/显示未运行；
+            # best-effort，失败仅告警不阻断重命名
+            scoped_old = self._history_file_path(task_name, acc_name)
+            scoped_new = self._history_file_path(effective_task_name, acc_name)
+            legacy_old = self.run_history_dir / f"{self._safe_history_key(task_name)}.json"
+            legacy_new = self.run_history_dir / f"{self._safe_history_key(effective_task_name)}.json"
+            history_moves = []
+            if scoped_old.exists():
+                history_moves.append((scoped_old, scoped_new))
+            if legacy_old.exists():
+                # legacy 文件迁到账号作用域新名；账号为空时保持 legacy 命名
+                history_moves.append((legacy_old, scoped_new if acc_name else legacy_new))
+            for src, dst in history_moves:
+                if dst == src or dst.exists():
+                    continue
+                try:
+                    src.rename(dst)
+                except OSError as e:
+                    logger.warning(
+                        "迁移任务历史失败: 任务=%s -> %s, 账号=%s, 错误=%s",
+                        task_name,
+                        effective_task_name,
+                        acc_name,
+                        e,
+                    )
 
         # Invalidate cache
         self._tasks_cache = None
