@@ -1,5 +1,6 @@
 {
   "openspec_proposal": "docs/openspec/changes/fix-task-center-remaining/proposal.md",
   "openspec_design": "docs/openspec/changes/fix-task-center-remaining/design.md",
-  "openspec_tasks": "docs/openspec/changes/fix-task-center-remaining/tasks.md"
+  "openspec_tasks": "docs/openspec/changes/fix-task-center-remaining/tasks.md",
+  "archive_directory": "docs/openspec/changes/archive/2026-10-02-fix-task-center-remaining"
 }

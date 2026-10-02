@@ -1,0 +1,28 @@
+cron-time: all assertions passed
+✔ lib/cron-time.test.mjs (33.263875ms)
+(node:38827) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/tune/Develop/GitHub/TG-AutoSign/frontend/lib/sign-task-urls.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/tune/Develop/GitHub/TG-AutoSign/frontend/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+sign-task-urls tests passed
+✔ lib/sign-task-urls.test.mjs (56.124667ms)
+(node:38828) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/tune/Develop/GitHub/TG-AutoSign/frontend/lib/task-form-nav.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/tune/Develop/GitHub/TG-AutoSign/frontend/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+task-form-nav tests passed
+✔ lib/task-form-nav.test.mjs (55.816625ms)
+(node:38829) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/tune/Develop/GitHub/TG-AutoSign/frontend/lib/task-list-sort.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/tune/Develop/GitHub/TG-AutoSign/frontend/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+task-list-sort: all assertions passed
+✔ lib/task-list-sort.test.mjs (65.256792ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 72.205167

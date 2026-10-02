@@ -1,0 +1,9 @@
+{
+  "action": "push",
+  "targetBranch": "main",
+  "remote": "origin",
+  "schemaVersion": 1,
+  "changeIdentity": "run:719fe7be-721c-4ac0-a6f1-ce6694403993",
+  "authorizationId": "7508c958-cd24-4b79-a397-0d3091131f49",
+  "authorizedRemoteUrl": "git@github-tunecc:tunecc/TG-AutoSign.git"
+}
