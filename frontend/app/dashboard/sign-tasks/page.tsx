@@ -1369,7 +1369,7 @@ export default function SignTasksPage() {
                                                         {new Date(log.time).toLocaleString(language === "zh" ? "zh-CN" : "en-US")}
                                                     </div>
                                                     <div className="text-sm font-semibold text-main/90 break-all mt-1">
-                                                        {log.message || t("task_history_no_flow")}
+                                                        {log.message || (log.success ? t("task_history_no_flow") : t("task_history_failed_no_reason"))}
                                                     </div>
                                                 </div>
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${log.success ? "status-badge-success" : "status-badge-danger"}`}>
@@ -1434,7 +1434,7 @@ export default function SignTasksPage() {
                                                                 </div>
                                                             ) : (
                                                                 <div className="ui-dim">
-                                                                    {log.message || t("task_history_no_flow")}
+                                                                    {log.message || (log.success ? t("task_history_no_flow") : t("task_history_failed_no_reason"))}
                                                                 </div>
                                                             )}
                                                         </>
