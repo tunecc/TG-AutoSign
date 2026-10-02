@@ -1,7 +1,8 @@
 import json
+import os
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
-
-import pytest
 
 from backend.services.sign_tasks import SignTaskService
 
@@ -139,3 +140,98 @@ def test_get_last_run_info_legacy_not_used_when_account_present(tmp_path, monkey
     # 有 account_name 时不应回退到 legacy 单文件
     result = service._get_last_run_info(task_dir, account_name="accB")
     assert result is None
+
+
+# ---------- _cleanup_old_logs 按条目时间裁剪 ----------
+
+
+def _iso_days_ago(days: int) -> str:
+    return (datetime.now() - timedelta(days=days)).isoformat()
+
+
+def test_cleanup_trims_old_entries_keeps_recent(tmp_path, monkeypatch):
+    """混合新旧条目：清理后只保留 3 天内条目，文件不删除。"""
+    _real_cleanup = SignTaskService._cleanup_old_logs
+    service = _make_service(tmp_path, monkeypatch)
+    # _make_service 将 _cleanup_old_logs 置为 no-op 以跳过 __init__ 清理；
+    # 本组测试需要调用真实实现，先保存再恢复
+    monkeypatch.setattr(SignTaskService, "_cleanup_old_logs", _real_cleanup)
+    history_file = service._history_file_path("taskT", "accA")
+    history_file.write_text(
+        json.dumps(
+            [
+                {"time": _iso_days_ago(1), "success": True, "message": "recent"},
+                {"time": _iso_days_ago(5), "success": False, "message": "old"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    service._cleanup_old_logs()
+
+    assert history_file.exists()
+    data = json.loads(history_file.read_text(encoding="utf-8"))
+    assert [e["message"] for e in data] == ["recent"]
+
+
+def test_cleanup_removes_file_when_all_entries_old(tmp_path, monkeypatch):
+    """全部条目超过 3 天：文件删除。"""
+    _real_cleanup = SignTaskService._cleanup_old_logs
+    service = _make_service(tmp_path, monkeypatch)
+    # _make_service 将 _cleanup_old_logs 置为 no-op 以跳过 __init__ 清理；
+    # 本组测试需要调用真实实现，先保存再恢复
+    monkeypatch.setattr(SignTaskService, "_cleanup_old_logs", _real_cleanup)
+    history_file = service._history_file_path("taskT", "accA")
+    history_file.write_text(
+        json.dumps([{"time": _iso_days_ago(5), "success": False, "message": "old"}]),
+        encoding="utf-8",
+    )
+
+    service._cleanup_old_logs()
+
+    assert not history_file.exists()
+
+
+def test_cleanup_keeps_entries_with_missing_or_invalid_time(tmp_path, monkeypatch):
+    """条目时间缺失/无法解析：保守保留，由条数上限兜底。"""
+    _real_cleanup = SignTaskService._cleanup_old_logs
+    service = _make_service(tmp_path, monkeypatch)
+    # _make_service 将 _cleanup_old_logs 置为 no-op 以跳过 __init__ 清理；
+    # 本组测试需要调用真实实现，先保存再恢复
+    monkeypatch.setattr(SignTaskService, "_cleanup_old_logs", _real_cleanup)
+    history_file = service._history_file_path("taskT", "accA")
+    history_file.write_text(
+        json.dumps(
+            [
+                {"success": True, "message": "no-time"},
+                {"time": "not-a-date", "success": True, "message": "bad-time"},
+                {"time": _iso_days_ago(1), "success": True, "message": "recent"},
+                {"time": _iso_days_ago(5), "success": True, "message": "old"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    service._cleanup_old_logs()
+
+    data = json.loads(history_file.read_text(encoding="utf-8"))
+    assert [e["message"] for e in data] == ["no-time", "bad-time", "recent"]
+
+
+def test_cleanup_falls_back_to_mtime_for_corrupt_file(tmp_path, monkeypatch):
+    """损坏 JSON 文件：退回按 mtime 删除（旧 mtime 删、新 mtime 留）。"""
+    _real_cleanup = SignTaskService._cleanup_old_logs
+    service = _make_service(tmp_path, monkeypatch)
+    monkeypatch.setattr(SignTaskService, "_cleanup_old_logs", _real_cleanup)
+    old_file = service._history_file_path("taskOld", "accA")
+    old_file.write_text("{not-json", encoding="utf-8")
+    fresh_file = service._history_file_path("taskFresh", "accA")
+    fresh_file.write_text("{not-json", encoding="utf-8")
+
+    four_days_ago = time.time() - 4 * 24 * 3600
+    os.utime(old_file, (four_days_ago, four_days_ago))
+
+    service._cleanup_old_logs()
+
+    assert not old_file.exists()
+    assert fresh_file.exists()

@@ -247,19 +247,63 @@ class SignTaskService:
         return False
 
     def _cleanup_old_logs(self):
-        """清理超过 3 天的日志"""
+        """清理超过 3 天的历史条目
+
+        按条目自身的 time 裁剪，而不是按文件 mtime 删除整个文件——任务只要
+        3 天没执行，mtime 就会过期，整文件删除会把仍在保留期内的条目一起清掉。
+        条目时间缺失或无法解析时保守保留，由 _history_max_entries 条数上限兜底；
+        文件损坏或非列表旧格式退回 mtime 判定，行为不劣于旧实现。
+        """
         from datetime import datetime, timedelta
 
         if not self.run_history_dir.exists():
             return
 
         limit = datetime.now() - timedelta(days=3)
+        limit_ts = limit.timestamp()
         for log_file in self.run_history_dir.glob("*.json"):
-            if log_file.stat().st_mtime < limit.timestamp():
+            try:
+                with open(log_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = None
+
+            if not isinstance(data, list):
+                # 损坏文件或旧版单条 dict 格式：退回 mtime 判定
+                try:
+                    if log_file.stat().st_mtime < limit_ts:
+                        log_file.unlink()
+                except OSError:
+                    continue
+                continue
+
+            kept = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                item_time_raw = item.get("time")
+                if not isinstance(item_time_raw, str) or not item_time_raw:
+                    kept.append(item)
+                    continue
+                try:
+                    item_time = datetime.fromisoformat(item_time_raw)
+                    if item_time.tzinfo is not None:
+                        # 与 naive limit 不可比时保守保留
+                        kept.append(item)
+                        continue
+                    if item_time >= limit:
+                        kept.append(item)
+                except ValueError:
+                    kept.append(item)
+
+            kept = kept[: self._history_max_entries]
+            if not kept:
                 try:
                     log_file.unlink()
-                except Exception:
+                except OSError:
                     continue
+            elif len(kept) != len(data):
+                _atomic_write_json(log_file, kept)
 
     def _safe_history_key(self, name: str) -> str:
         return name.replace("/", "_").replace("\\", "_")
