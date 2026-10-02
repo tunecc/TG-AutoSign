@@ -530,8 +530,7 @@ class SignTaskService:
                         config = json.load(f)
                     if "last_run" in config:
                         del config["last_run"]
-                        with open(config_file, "w", encoding="utf-8") as f:
-                            json.dump(config, f, ensure_ascii=False, indent=2)
+                        _atomic_write_json(config_file, config)
                 except Exception:
                     pass
 
@@ -610,8 +609,7 @@ class SignTaskService:
                     pass
             else:
                 try:
-                    with open(legacy_file, "w", encoding="utf-8") as f:
-                        json.dump(kept, f, ensure_ascii=False, indent=2)
+                    _atomic_write_json(legacy_file, kept)
                 except Exception:
                     pass
 
