@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +41,26 @@ from tg_signer.session_lock import session_file_lock_for_client
 
 settings = get_settings()
 logger = logging.getLogger("backend.sign_tasks")
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    """原子写 JSON：先写同目录临时文件再 os.replace。
+
+    任务配置与运行历史是并发读取的关键文件，直接 open(path, "w") 截断写入时，
+    进程中途被杀（容器重启/OOM/超时强杀）会留下撕裂的半截 JSON，导致
+    get_task/_load_task_config 解析失败、任务从列表消失、编辑页 404。
+    """
+    tmp_path = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
 
 
 async def _maybe_report_progress(progress_callback, phase: str, phase_text: str, message: str) -> None:
@@ -693,8 +714,7 @@ class SignTaskService:
         history = history[: self._history_max_entries]
 
         try:
-            with open(history_file, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
+            _atomic_write_json(history_file, history)
 
             # 同时更新任务配置中的 last_run
             # 1. 更新磁盘上的 config.json
@@ -715,8 +735,7 @@ class SignTaskService:
                         with open(config_file, "r", encoding="utf-8") as f:
                             config = json.load(f)
                         config["last_run"] = new_entry
-                        with open(config_file, "w", encoding="utf-8") as f:
-                            json.dump(config, f, ensure_ascii=False, indent=2)
+                        _atomic_write_json(config_file, config)
                     except Exception as e:
                         logger.error("更新任务配置 last_run 失败: 任务=%s, 账号=%s, 错误=%s", task_name, account_name, e)
 
@@ -942,8 +961,7 @@ class SignTaskService:
         config_file = task_dir / "config.json"
 
         try:
-            with open(config_file, "w", encoding="utf-8") as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            _atomic_write_json(config_file, config)
         except Exception as e:
             print(f"DEBUG: 写入配置文件失败: {str(e)}")
             raise
@@ -1052,8 +1070,7 @@ class SignTaskService:
             task_dir = self.signs_dir / task_name
 
         config_file = task_dir / "config.json"
-        with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(config_file, config)
 
         # 执行目录重命名
         if target_dir is not None:
@@ -1138,31 +1155,35 @@ class SignTaskService:
             import shutil
 
             shutil.rmtree(task_dir)
-            # Invalidate cache
-            self._tasks_cache = None
-
-            # best-effort 清理 history 文件，失败不阻断删除
-            for cleanup_path in (
-                self._history_file_path(task_name, real_account_name or ""),
-                self.run_history_dir / f"{self._safe_history_key(task_name)}.json",
-            ):
-                try:
-                    if cleanup_path.exists():
-                        cleanup_path.unlink()
-                except Exception as e:
-                    logger.warning("清理 history 文件失败: %s, 错误: %s", cleanup_path, e)
-
-            if real_account_name:
-                try:
-                    from backend.scheduler import remove_sign_task_job
-
-                    remove_sign_task_job(real_account_name, task_name)
-                except Exception as e:
-                    print(f"DEBUG: 移除调度任务失败: {e}")
-
-            return True
         except Exception:
+            # 删除中途失败也要失效缓存，否则列表仍显示残缺任务（无 config.json），
+            # 点击编辑会得到 404"任务不存在"
+            self._tasks_cache = None
             return False
+
+        # Invalidate cache
+        self._tasks_cache = None
+
+        # best-effort 清理 history 文件，失败不阻断删除
+        for cleanup_path in (
+            self._history_file_path(task_name, real_account_name or ""),
+            self.run_history_dir / f"{self._safe_history_key(task_name)}.json",
+        ):
+            try:
+                if cleanup_path.exists():
+                    cleanup_path.unlink()
+            except Exception as e:
+                logger.warning("清理 history 文件失败: %s, 错误: %s", cleanup_path, e)
+
+        if real_account_name:
+            try:
+                from backend.scheduler import remove_sign_task_job
+
+                remove_sign_task_job(real_account_name, task_name)
+            except Exception as e:
+                print(f"DEBUG: 移除调度任务失败: {e}")
+
+        return True
 
     async def get_account_chats(
         self, account_name: str, force_refresh: bool = False
