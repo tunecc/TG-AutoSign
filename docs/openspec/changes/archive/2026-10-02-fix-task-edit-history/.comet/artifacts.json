@@ -1,5 +1,6 @@
 {
   "openspec_proposal": "docs/openspec/changes/fix-task-edit-history/proposal.md",
   "openspec_design": "docs/openspec/changes/fix-task-edit-history/design.md",
-  "openspec_tasks": "docs/openspec/changes/fix-task-edit-history/tasks.md"
+  "openspec_tasks": "docs/openspec/changes/fix-task-edit-history/tasks.md",
+  "archive_directory": "docs/openspec/changes/archive/2026-10-02-fix-task-edit-history"
 }

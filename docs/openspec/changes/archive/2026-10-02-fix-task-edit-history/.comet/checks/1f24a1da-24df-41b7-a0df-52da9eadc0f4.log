@@ -1,0 +1,16 @@
+...............................................                          [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /Users/tune/Develop/GitHub/TG-AutoSign/.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+backend/api/routes/accounts.py:523
+  /Users/tune/Develop/GitHub/TG-AutoSign/backend/api/routes/accounts.py:523: DeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+    format: str = Query("telethon", regex="^(telethon|tdata)$"),
+
+.venv/lib/python3.12/site-packages/pyrogram/sync.py:31
+  /Users/tune/Develop/GitHub/TG-AutoSign/.venv/lib/python3.12/site-packages/pyrogram/sync.py:31: DeprecationWarning: There is no current event loop
+    main_loop = asyncio.get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+47 passed, 3 warnings in 2.84s
