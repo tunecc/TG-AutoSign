@@ -925,13 +925,12 @@ class SignTaskService:
         try:
             with open(config_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
+            chats = _normalize_task_chats(config.get("chats"), config.get("_version"))
         except Exception as e:
             logger.warning(
                 "任务配置解析失败（任务将从列表隐藏）: 路径=%s, 错误=%s", config_file, e
             )
             return None
-
-        chats = _normalize_task_chats(config.get("chats"), config.get("_version"))
 
         return {
             "name": task_name,

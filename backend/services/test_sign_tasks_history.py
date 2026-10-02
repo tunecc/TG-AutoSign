@@ -277,3 +277,31 @@ def test_update_task_migrates_legacy_history_on_rename(tmp_path, monkeypatch):
     assert migrated.exists()
     data = json.loads(migrated.read_text(encoding="utf-8"))
     assert data[0]["message"] == "legacy-ok"
+
+
+def test_get_task_returns_none_for_malformed_interval(tmp_path, monkeypatch):
+    """畸形动作间隔配置：get_task 返回 None（404 语义），不得上抛变成 500。"""
+    service = _make_service(tmp_path, monkeypatch)
+    task_dir = service.signs_dir / "accA" / "taskT"
+    task_dir.mkdir(parents=True)
+    (task_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "name": "taskT",
+                "account_name": "accA",
+                "sign_at": "0 0 * * *",
+                "chats": [
+                    {
+                        "chat_id": 1,
+                        "actions": [],
+                        "action_interval_mode": "random",
+                        "action_interval_min_ms": 500,
+                        "action_interval_max_ms": 100,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert service.get_task("taskT", account_name="accA") is None
