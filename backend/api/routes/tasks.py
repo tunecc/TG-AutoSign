@@ -114,7 +114,8 @@ async def run_task(
     task = task_service.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    log = await task_service.run_task_once(db, task)
+    # 手动运行强制执行一次；调度触发保持 --no-force 的"今日已执行则跳过"语义
+    log = await task_service.run_task_once(db, task, force_rerun=True)
     return log
 
 

@@ -136,7 +136,9 @@ def _dispatch_task_completion_notification(
     )
 
 
-async def run_task_once(db: Session, task: Task) -> TaskLog:
+async def run_task_once(
+    db: Session, task: Task, force_rerun: bool = False
+) -> TaskLog:
     if is_task_running(task.id):
         # 如果已经在运行，返回最新的运行记录（或者抛出异常）
         last_log = (
@@ -174,6 +176,7 @@ async def run_task_once(db: Session, task: Task) -> TaskLog:
             account_name=account.account_name,
             task_name=task.name,
             callback=log_callback,
+            force_rerun=force_rerun,
         )
 
         full_output = (stdout or "") + "\n" + (stderr or "")
