@@ -6,6 +6,7 @@ import {
   TelegramNotificationConfig,
   TokenResponse,
 } from "./types";
+import { buildSignTaskUrl, encodePathSegment } from "./sign-task-urls";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "/api";
 
@@ -875,10 +876,9 @@ export async function listSignTasks(token: string, accountName?: string, forceRe
 }
 
 export const getSignTask = (token: string, name: string, accountName?: string) => {
-  const params = new URLSearchParams();
-  if (accountName) params.append("account_name", accountName);
-  const url = `/sign-tasks/${name}${params.toString() ? `?${params.toString()}` : ""}`;
-  return request<SignTask>(url, {}, token);
+  const params: Record<string, string> = {};
+  if (accountName) params.account_name = accountName;
+  return request<SignTask>(buildSignTaskUrl(name, { params }), {}, token);
 };
 
 export const createSignTask = (token: string, data: CreateSignTaskRequest) =>
@@ -888,13 +888,13 @@ export const createSignTask = (token: string, data: CreateSignTaskRequest) =>
   }, token);
 
 export const updateSignTask = (token: string, name: string, data: UpdateSignTaskRequest, accountName?: string) =>
-  request<SignTask>(`/sign-tasks/${name}${accountName ? `?account_name=${accountName}` : ''}`, {
+  request<SignTask>(buildSignTaskUrl(name, { params: accountName ? { account_name: accountName } : {} }), {
     method: "PUT",
     body: JSON.stringify(data),
   }, token);
 
 export const deleteSignTask = (token: string, name: string, accountName?: string) =>
-  request<{ ok: boolean }>(`/sign-tasks/${name}${accountName ? `?account_name=${accountName}` : ''}`, {
+  request<{ ok: boolean }>(buildSignTaskUrl(name, { params: accountName ? { account_name: accountName } : {} }), {
     method: "DELETE",
   }, token);
 
@@ -921,12 +921,12 @@ export const deleteSignTasksBatch = (token: string, tasks: BatchDeleteTaskItem[]
   }, token);
 
 export const runSignTask = (token: string, name: string, accountName: string) =>
-  request<SignTaskRunResult>(`/sign-tasks/${name}/run?account_name=${accountName}`, {
+  request<SignTaskRunResult>(buildSignTaskUrl(name, { suffix: "run", params: { account_name: accountName } }), {
     method: "POST",
   }, token);
 
 export const getSignTaskStatus = (token: string, name: string, accountName: string) =>
-  request<SignTaskStatus>(`/sign-tasks/${name}/run-status?account_name=${accountName}`, {}, token);
+  request<SignTaskStatus>(buildSignTaskUrl(name, { suffix: "run-status", params: { account_name: accountName } }), {}, token);
 
 export const getSignTaskMonitorWebSocketUrl = (
   token: string,
@@ -954,7 +954,7 @@ export const getSignTaskMonitorWebSocketUrl = (
 };
 
 export const getAccountChats = (token: string, accountName: string, forceRefresh?: boolean) =>
-  request<ChatInfo[]>(`/sign-tasks/chats/${accountName}${forceRefresh ? '?force_refresh=true' : ''}`, {}, token);
+  request<ChatInfo[]>(`/sign-tasks/chats/${encodePathSegment(accountName)}${forceRefresh ? '?force_refresh=true' : ''}`, {}, token);
 
 export const searchAccountChats = (
   token: string,
@@ -967,14 +967,13 @@ export const searchAccountChats = (
   params.append("q", query);
   params.append("limit", String(limit));
   params.append("offset", String(offset));
-  return request<ChatSearchResponse>(`/sign-tasks/chats/${accountName}/search?${params.toString()}`, {}, token);
+  return request<ChatSearchResponse>(`/sign-tasks/chats/${encodePathSegment(accountName)}/search?${params.toString()}`, {}, token);
 };
 
 export const getSignTaskLogs = (token: string, name: string, accountName?: string) => {
-    const params = new URLSearchParams();
-    if (accountName) params.append("account_name", accountName);
-    const url = `/sign-tasks/${name}/logs${params.toString() ? `?${params.toString()}` : ""}`;
-    return request<string[]>(url, {}, token);
+    const params: Record<string, string> = {};
+    if (accountName) params.account_name = accountName;
+    return request<string[]>(buildSignTaskUrl(name, { suffix: "logs", params }), {}, token);
 };
 
 export interface SignTaskHistoryItem {
@@ -1003,11 +1002,11 @@ export const getSignTaskHistory = (
   accountName: string,
   limit: number = 20
 ) => {
-  const params = new URLSearchParams();
-  params.append("account_name", accountName);
-  params.append("limit", String(limit));
   return request<SignTaskHistoryItem[]>(
-    `/sign-tasks/${name}/history?${params.toString()}`,
+    buildSignTaskUrl(name, {
+      suffix: "history",
+      params: { account_name: accountName, limit: String(limit) },
+    }),
     {},
     token
   );
