@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import (
@@ -32,6 +33,21 @@ from backend.services.sign_tasks import get_sign_task_service
 
 router = APIRouter()
 logger = logging.getLogger("backend.api.sign_tasks")
+
+# 任务名会同时作为目录名与 URL 路径段：拒绝 Windows 非法字符、会破坏未编码
+# URL 路径的 # %、路径逃逸 .. 与 NUL。create 的 pydantic 校验与 update 路由
+# 必须使用同一规则，避免两侧校验集合不一致。
+_INVALID_TASK_NAME_CHARS = re.compile(r'[<>:"/\\|?*#%]')
+
+
+def _is_invalid_task_name(name: str) -> bool:
+    if not name or not name.strip():
+        return True
+    if _INVALID_TASK_NAME_CHARS.search(name):
+        return True
+    if ".." in name or "\x00" in name:
+        return True
+    return False
 
 
 # Pydantic 模型定义
@@ -109,14 +125,10 @@ class SignTaskCreate(BaseModel):
 
     @validator("name")
     def name_must_be_valid_filename(cls, v):
-        import re
-
-        if not v or not v.strip():
-            raise ValueError("任务名称不能为空")
-        # Windows 文件名非法字符检查
-        invalid_chars = r'[<>:"/\\|?*]'
-        if re.search(invalid_chars, v):
-            raise ValueError('任务名称不能包含特殊字符: < > : " / \\ | ? *')
+        if _is_invalid_task_name(v):
+            raise ValueError(
+                '任务名称无效：不能为空，且不能包含 < > : " / \\ | ? * # % .. 或空字节'
+            )
         return v
 
 
@@ -369,8 +381,7 @@ async def update_sign_task(
     """更新签到任务"""
     # 在进入服务层前校验新名称的合法性，非法输入 → 400
     if payload.name is not None:
-        n = payload.name
-        if not n or "/" in n or "\\" in n or ".." in n or "\x00" in n:
+        if _is_invalid_task_name(payload.name):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="任务名称无效",
