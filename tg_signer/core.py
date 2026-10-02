@@ -1650,10 +1650,11 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
     async def send_text(
         self, chat_id: int, text: str, delete_after: int = None, **kwargs
     ):
-        if self.user is None:
-            await self.login(print_chat=False)
-        async with self.app:
-            await self.send_message(chat_id, text, delete_after, **kwargs)
+        async with self._session_file_lock():
+            if self.user is None:
+                await self.login(print_chat=False)
+            async with self.app:
+                await self.send_message(chat_id, text, delete_after, **kwargs)
 
     async def send_dice_cli(
         self,
@@ -1662,10 +1663,11 @@ class UserSigner(BaseUserWorker[SignConfigV4]):
         delete_after: int = None,
         **kwargs,
     ):
-        if self.user is None:
-            await self.login(print_chat=False)
-        async with self.app:
-            await self.send_dice(chat_id, emoji, delete_after, **kwargs)
+        async with self._session_file_lock():
+            if self.user is None:
+                await self.login(print_chat=False)
+            async with self.app:
+                await self.send_dice(chat_id, emoji, delete_after, **kwargs)
 
     async def _on_message(self, client: Client, message: Message):
         chats = self.context.sign_chats.get(message.chat.id)
