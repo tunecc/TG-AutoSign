@@ -887,6 +887,39 @@ export const createSignTask = (token: string, data: CreateSignTaskRequest) =>
     body: JSON.stringify(data),
   }, token);
 
+export interface QuickCreateBot {
+  name: string;
+  chat_id: number;
+  commands: string[];
+}
+
+export interface QuickCreateSignTaskRequest {
+  accounts: string[];
+  bots: QuickCreateBot[];
+  frequency_hours?: number;
+  random_delay_seconds?: number;
+  interval_min_seconds?: number;
+  interval_max_seconds?: number;
+  task_name_prefix?: string;
+}
+
+export interface QuickCreateFailedItem {
+  account_name: string;
+  task_name: string;
+  error: string;
+}
+
+export interface QuickCreateSignTaskResponse {
+  created: SignTask[];
+  failed: QuickCreateFailedItem[];
+}
+
+export const quickCreateSignTasks = (token: string, data: QuickCreateSignTaskRequest) =>
+  request<QuickCreateSignTaskResponse>("/sign-tasks/quick-create", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }, token);
+
 export const updateSignTask = (token: string, name: string, data: UpdateSignTaskRequest, accountName?: string) =>
   request<SignTask>(buildSignTaskUrl(name, { params: accountName ? { account_name: accountName } : {} }), {
     method: "PUT",

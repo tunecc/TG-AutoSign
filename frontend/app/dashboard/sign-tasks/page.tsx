@@ -729,6 +729,13 @@ export default function SignTasksPage() {
                         </>
                     )}
                     <Link
+                        href="/dashboard/sign-tasks/quick-create"
+                        className={`action-btn !w-8 !h-8 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10 ${loading ? 'pointer-events-none opacity-20' : ''}`}
+                        title={language === "zh" ? "快速创建" : "Quick Create"}
+                    >
+                        <Lightning weight="bold" size={18} />
+                    </Link>
+                    <Link
                         href={buildCreateTaskPath({ from: "sign-tasks" })}
                         className={`action-btn !w-8 !h-8 !text-[#8a3ffc] hover:bg-[#8a3ffc]/10 ${loading ? 'pointer-events-none opacity-20' : ''}`}
                         title={t("add_task")}

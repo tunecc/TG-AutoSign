@@ -145,6 +145,60 @@ class SignTaskUpdate(BaseModel):
     range_end: Optional[str] = Field(None, description="随机范围结束时间")
 
 
+class QuickCreateBotConfig(BaseModel):
+    """快速创建：单个机器人的配置"""
+
+    name: str = Field("", description="机器人别名，如 蓝色")
+    chat_id: int = Field(..., description="机器人 Chat ID")
+    commands: List[str] = Field(..., description="按顺序发送的命令，如 ['/qd', '/hz 15070527892 5']")
+
+    @validator("commands")
+    def commands_must_be_non_empty(cls, v):
+        cleaned = [str(c).strip() for c in (v or []) if str(c).strip()]
+        if not cleaned:
+            raise ValueError("每个机器人至少配置一条命令")
+        return cleaned
+
+
+class QuickCreateSignTaskRequest(BaseModel):
+    """快速创建签到任务请求：为每个账号生成一个覆盖全部机器人的任务"""
+
+    accounts: List[str] = Field(..., description="执行任务的账号列表")
+    bots: List[QuickCreateBotConfig] = Field(..., min_items=1, description="机器人清单")
+    frequency_hours: int = Field(
+        1, ge=1, le=24, description="执行频率：每 N 小时一轮（全天覆盖）"
+    )
+    random_delay_seconds: int = Field(
+        3600, gt=0, description="小时内随机延迟上限（秒），实际钳制到触发间隔内"
+    )
+    interval_min_seconds: int = Field(60, gt=0, description="动作间随机间隔下限（秒）")
+    interval_max_seconds: int = Field(600, gt=0, description="动作间随机间隔上限（秒）")
+    task_name_prefix: str = Field("快速签到", description="任务名前缀，任务名为 前缀-账号名")
+
+    @validator("interval_max_seconds")
+    def interval_range_valid(cls, v, values):
+        min_seconds = values.get("interval_min_seconds")
+        if min_seconds is not None and v < min_seconds:
+            raise ValueError("动作间隔上限不能小于下限")
+        return v
+
+    @validator("task_name_prefix")
+    def prefix_must_be_valid_filename(cls, v):
+        if _is_invalid_task_name(v):
+            raise ValueError(
+                '任务名前缀无效：不能为空，且不能包含 < > : " / \\ | ? * # % .. 或空字节'
+            )
+        return v
+
+
+class QuickCreateFailedItem(BaseModel):
+    """快速创建：单个账号的失败结果"""
+
+    account_name: str = Field(..., description="账号名称")
+    task_name: str = Field(..., description="任务名称")
+    error: str = Field(..., description="失败原因")
+
+
 class LastRunInfo(BaseModel):
     """最后执行信息"""
 
@@ -167,6 +221,13 @@ class SignTaskOut(BaseModel):
     execution_mode: Optional[str] = "fixed"
     range_start: Optional[str] = None
     range_end: Optional[str] = None
+
+
+class QuickCreateSignTaskResponse(BaseModel):
+    """快速创建结果：成功任务列表与按账号的失败列表"""
+
+    created: List[SignTaskOut] = Field(default_factory=list, description="创建成功的任务")
+    failed: List[QuickCreateFailedItem] = Field(default_factory=list, description="创建失败的账号")
 
 
 class ChatOut(BaseModel):
@@ -356,6 +417,46 @@ async def create_sign_task(
             describe_exception(e),
         )
         raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
+
+
+@router.post("/quick-create", response_model=QuickCreateSignTaskResponse)
+async def quick_create_sign_tasks(
+    payload: QuickCreateSignTaskRequest,
+    current_user=Depends(get_current_user),
+):
+    """快速创建：为每个账号生成一个"每小时对全部机器人执行命令序列"的签到任务
+
+    部分账号失败不影响其余账号；失败原因按账号返回。
+    """
+    try:
+        result = get_sign_task_service().quick_create_tasks(
+            accounts=payload.accounts,
+            bots=[bot.dict() for bot in payload.bots],
+            frequency_hours=payload.frequency_hours,
+            random_delay_seconds=payload.random_delay_seconds,
+            interval_min_seconds=payload.interval_min_seconds,
+            interval_max_seconds=payload.interval_max_seconds,
+            task_name_prefix=payload.task_name_prefix,
+        )
+
+        # 同步调度器（批量创建后统一同步一次）
+        from backend.scheduler import sync_jobs
+
+        await sync_jobs()
+
+        return result
+    except IntervalValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception(
+            "快速创建签到任务失败: 账号=%s, 机器人数=%s, 错误=%s",
+            payload.accounts,
+            len(payload.bots),
+            describe_exception(e),
+        )
+        raise HTTPException(status_code=500, detail=f"快速创建任务失败: {str(e)}")
 
 
 @router.get("/{task_name}", response_model=SignTaskOut)

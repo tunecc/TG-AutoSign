@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -1040,6 +1041,133 @@ class SignTaskService:
             "range_start": range_start,
             "range_end": range_end,
         }
+
+    def quick_create_tasks(
+        self,
+        accounts: List[str],
+        bots: List[Dict[str, Any]],
+        frequency_hours: int = 1,
+        random_delay_seconds: int = 3600,
+        interval_min_seconds: int = 60,
+        interval_max_seconds: int = 600,
+        task_name_prefix: str = "快速签到",
+    ) -> Dict[str, Any]:
+        """
+        按"每账号一个任务、多机器人签到"的快速创建语义批量生成签到任务。
+
+        每个账号生成一个任务，任务内每个机器人一个 chat，chat 内动作依次
+        发送传入命令；调度为每 frequency_hours 小时触发一次，random_seconds
+        提供小时内随机延迟（钳制到触发间隔内）；同一 chat 内动作之间使用
+        random 模式间隔（interval_min/max 秒）。
+
+        部分账号创建失败不影响其余账号，失败信息按账号返回。
+        """
+        normalized_accounts = []
+        for raw in accounts or []:
+            name = str(raw).strip()
+            if name and name not in normalized_accounts:
+                normalized_accounts.append(name)
+        if not normalized_accounts:
+            raise ValueError("至少选择一个账号")
+
+        if not bots:
+            raise ValueError("至少配置一个机器人")
+
+        normalized_bots: List[Dict[str, Any]] = []
+        for raw in bots:
+            chat_id = raw.get("chat_id")
+            try:
+                chat_id = int(chat_id)
+            except (TypeError, ValueError):
+                raise ValueError(f"机器人 Chat ID 无效: {chat_id}")
+            commands = []
+            for cmd in raw.get("commands") or []:
+                text = str(cmd).strip()
+                if text:
+                    commands.append(text)
+            if not commands:
+                raise ValueError(f"机器人 {chat_id} 未配置任何命令")
+            normalized_bots.append(
+                {
+                    "chat_id": chat_id,
+                    "name": str(raw.get("name") or "").strip(),
+                    "commands": commands,
+                }
+            )
+
+        try:
+            frequency_hours = int(frequency_hours)
+        except (TypeError, ValueError):
+            raise ValueError("执行频率必须是整数小时数")
+        if frequency_hours < 1:
+            raise ValueError("执行频率至少为 1 小时")
+
+        try:
+            interval_min_seconds = int(interval_min_seconds)
+            interval_max_seconds = int(interval_max_seconds)
+        except (TypeError, ValueError):
+            raise ValueError("动作间隔必须是整数秒")
+        if interval_min_seconds <= 0 or interval_min_seconds > interval_max_seconds:
+            raise ValueError("动作间隔下限必须大于 0 且不超过上限")
+
+        try:
+            random_delay_seconds = int(random_delay_seconds)
+        except (TypeError, ValueError):
+            raise ValueError("随机延迟必须是整数秒")
+        if random_delay_seconds <= 0:
+            raise ValueError("随机延迟必须大于 0 秒")
+
+        prefix = str(task_name_prefix or "").strip()
+        if not prefix:
+            raise ValueError("任务名前缀不能为空")
+
+        # 每小时触发一次；random_seconds 钳制到触发间隔内（留 10 分钟余量），
+        # 保证执行时刻落在触发周期内且不会与下一轮重叠。
+        if frequency_hours == 1:
+            cron = "0 0 * * * *"
+        else:
+            cron = f"0 0 */{frequency_hours} * * *"
+        interval_seconds = frequency_hours * 3600
+        effective_random_seconds = min(random_delay_seconds, interval_seconds - 600)
+        if effective_random_seconds <= 0:
+            effective_random_seconds = max(60, interval_seconds // 2)
+
+        chats = [
+            {
+                "chat_id": bot["chat_id"],
+                "name": bot["name"],
+                "actions": [{"action": 1, "text": cmd} for cmd in bot["commands"]],
+                "action_interval_mode": "random",
+                "action_interval_min_ms": interval_min_seconds * 1000,
+                "action_interval_max_ms": interval_max_seconds * 1000,
+            }
+            for bot in normalized_bots
+        ]
+
+        created: List[Dict[str, Any]] = []
+        failed: List[Dict[str, Any]] = []
+        for account in normalized_accounts:
+            task_name = f"{prefix}-{account}"
+            try:
+                task = self.create_task(
+                    task_name=task_name,
+                    account_name=account,
+                    sign_at=cron,
+                    chats=copy.deepcopy(chats),
+                    random_seconds=effective_random_seconds,
+                    sign_interval=60,
+                )
+                created.append(task)
+            except FileExistsError as e:
+                failed.append(
+                    {"account_name": account, "task_name": task_name, "error": str(e)}
+                )
+            except Exception as e:
+                failed.append(
+                    {"account_name": account, "task_name": task_name, "error": str(e)}
+                )
+
+        return {"created": created, "failed": failed}
 
     def update_task(
         self,
